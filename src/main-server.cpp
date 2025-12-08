@@ -18,7 +18,8 @@
 #include <iterator>
 #include <unordered_map>
 #include <unordered_set>
-
+#include <Eigen/Dense>
+#include <csignal>
 
 #define PORT 8080
 
@@ -26,6 +27,52 @@ using namespace std;
 
 unordered_set<int> connectedProcessors;
 int connectedClient=0;
+string log_buffer;
+int globalServerSocket = -1;
+
+// <--- 3. Manejador de señal para el servidor
+void signalHandler(int signum) {
+    cout << "\nInterrupcion detectada (Ctrl+C). Apagando servidor..." << endl;
+    
+    if (globalServerSocket != -1) {
+        shutdown(globalServerSocket, SHUT_RDWR);
+        close(globalServerSocket);
+        cout << "Socket del servidor cerrado." << endl;
+    }
+    
+    // Opcional: Podrías recorrer connectedProcessors y cerrar esos sockets también aquí
+    
+    exit(signum);
+}
+
+int GetSize (int SocketClient,string &buffer){
+    buffer.resize(sizeof(int));
+    read(SocketClient,buffer.data(),sizeof(int));
+    log_buffer += buffer;
+    int* aux=(int*)buffer.data();
+    int size=*aux;
+    return size;
+}
+
+void readN(int SocketClient, string &readBuffer, int UnU = -1){
+    int n;
+    if(UnU == -1){
+        n = GetSize(SocketClient, readBuffer);
+    }
+    else{
+        n = UnU;
+    }
+    readBuffer.resize(n);
+    int tmp2=n; 
+    int tmp3=0;
+    while(tmp2>0){
+        int c;
+        c=read(SocketClient,readBuffer.data()+tmp3,min(1000,tmp2));
+        log_buffer += readBuffer;
+        tmp2-=c;
+        tmp3+=c;
+    }
+}
 
 string formatSize(int value, int n) {
     std::ostringstream oss;
@@ -37,30 +84,28 @@ string formatSize(int value, int n) {
 void readSocket(int SocketClient){
     string readBuffer;
     string writeBuffer;
-    string log;
-
     bool flag1=true;
 
     while (flag1){
         readBuffer.resize(1);
         read(SocketClient,readBuffer.data(),1);
-        log=readBuffer;
+        log_buffer=readBuffer;
 
         switch (readBuffer[0])
         {
         case 's':
-            cout<<"Received:" <<log<<endl;
+            cout<<"Received:" <<log_buffer<<endl;
             connectedProcessors.insert(SocketClient);
             break;
         
         case 'c':
             {
-                cout<<"Received:" <<log<<endl;
+                cout<<"Received:" <<log_buffer<<endl;
                 if (connectedClient==0){
                     connectedClient=SocketClient;
                     writeBuffer="C";
-                    log=writeBuffer;
-                    cout<<"Sent:" <<log<<endl;
+                    log_buffer=writeBuffer;
+                    cout<<"Sent:" <<log_buffer<<endl;
                     write(SocketClient,writeBuffer.data(),writeBuffer.size());
                 }
                 else {
@@ -75,21 +120,21 @@ void readSocket(int SocketClient){
                     }
 
                     string str2;
-                    str2.resize(4);
+                    str2.resize(sizeof(int));
                     for (int i = 0; i < size;i++) {
                         str2[i] = *(((char*)&size) + i);
                     }
 
                     writeBuffer="X"+str2+str1;
-                    log=writeBuffer;
-                    cout<<"Sent:" <<log<<endl;
+                    log_buffer=writeBuffer;
+                    cout<<"Sent:" <<log_buffer<<endl;
                     write(SocketClient,writeBuffer.data(),writeBuffer.size());
                 }
             }
             break;
 
         case 'q':
-            cout<<"Received:" <<log<<endl;
+            cout<<"Received:" <<log_buffer<<endl;
             if (connectedClient==SocketClient){
                 connectedClient=0;
             }
@@ -98,16 +143,22 @@ void readSocket(int SocketClient){
             }
             flag1=false;
             break;
-        
+        case 'f': 
+            {
+            int rows = GetSize(SocketClient, readBuffer);
+            int cols = GetSize(SocketClient, readBuffer);
+            cout<<"Received:" <<log_buffer<<endl;
+            int datasize = rows * cols * sizeof(double);
+            Eigen::MatrixXd receivedMat(rows, cols);
+            read(SocketClient, receivedMat.data(), datasize);
+            cout << "Matriz Recibida:" << endl;
+            cout << receivedMat << endl;
+            break;
+            }
         default:
             break;
         }
     }
-
-
-
-
-
     
 }
 
@@ -115,6 +166,7 @@ void readSocket(int SocketClient){
 
 
 int main(int argc, char * argv[]){
+    signal(SIGINT, signalHandler);
     int portNumber;
 
     if (argc >= 2) {
@@ -125,6 +177,7 @@ int main(int argc, char * argv[]){
 
     struct sockaddr_in stSockAddr;
     int SocketServer = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    globalServerSocket = SocketServer;
 
     memset(&stSockAddr, 0, sizeof(struct sockaddr_in));
     

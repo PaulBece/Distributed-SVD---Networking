@@ -16,7 +16,7 @@
 #include <limits>
 #include <fstream>
 #include <iterator>
-
+#include <Eigen/Dense>
 #define PORT 8080
 
 using namespace std;
@@ -74,7 +74,7 @@ int main(int argc, char * argv[]){
     //     "1 Change nickname.\n"<<
     //     "2 Send private message.\n"<<
     //     "3 Send broadcast.\n"<<
-    //     "4 List all chat members.\n"<<
+    //     "sizeof(int) List all chat members.\n"<<
     //     "5 Send file.\n"<<
     //     "6 Play TikTakToe.\n"<<
     //     "0 Exit chat."<<endl;
@@ -93,7 +93,7 @@ int main(int argc, char * argv[]){
     //     case 3://m
     //         broadcast(SocketClient);
     //         break;
-    //     case 4://l
+    //     case sizeof(int)://l
     //         buffer="l";
     //         write(SocketClient,buffer.data(),1);
     //         break;

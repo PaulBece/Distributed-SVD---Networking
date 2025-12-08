@@ -16,15 +16,103 @@
 #include <limits>
 #include <fstream>
 #include <iterator>
+#include <Eigen/Dense>
+#include <csignal>
 
 #define PORT 8080
 
 using namespace std;
 
-int main(int argc, char * argv[]){
-    int portNumber;
+// <--- 2. Variable Global para poder accederla desde el signal handler
+int globalSocketClient = -1; 
 
-    cout<<"UwU"<<endl;
+// <--- 3. Función que maneja el Ctrl + C
+void signalHandler(int signum) {
+    cout << "\nInterrupcion detectada (Ctrl+C). Cerrando cliente..." << endl;
+    
+    if (globalSocketClient != -1) {
+        // Intentar avisar al servidor que nos vamos
+        string msg = "q";
+        write(globalSocketClient, msg.data(), msg.size());
+        
+        // Cerrar el socket
+        shutdown(globalSocketClient, SHUT_RDWR);
+        close(globalSocketClient);
+        cout << "Socket cerrado correctamente." << endl;
+    }
+    
+    exit(signum); // Terminar el programa
+}
+
+Eigen::MatrixXd readCSV(const std::string &path) {
+    std::ifstream indata;
+    indata.open(path);
+    
+    if (!indata.is_open()) {
+        std::cerr << "Error: No se pudo abrir el archivo " << path << std::endl;
+        // Devuelve una matriz vacía o maneja el error según prefieras
+        return Eigen::MatrixXd(0, 0); 
+    }
+
+    std::string line;
+    std::vector<double> values;
+    int rows = 0;
+
+    while (std::getline(indata, line)) {
+        std::stringstream lineStream(line);
+        std::string cell;
+        while (std::getline(lineStream, cell, ',')) {
+            // Convertir string a double y guardar
+            values.push_back(std::stod(cell));
+        }
+        rows++;
+    }
+    
+    // Calcular columnas basándonos en el total de elementos y filas
+    if (rows == 0) return Eigen::MatrixXd(0,0);
+    int cols = values.size() / rows;
+
+    // Mapear el vector plano a una Matriz Eigen.
+    // Importante: Usamos RowMajor porque C++ lee línea por línea (fila por fila),
+    // pero Eigen por defecto es ColumnMajor.
+    return Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(values.data(), rows, cols);
+}
+
+string CastIntToString(int n){
+    string tmp;
+    tmp.resize(sizeof(int));
+    char *OwO= (char*)&n;
+    for ( int i = 0; i < sizeof(int); i++)
+    {
+        tmp[i] = *(OwO + i);
+    }
+    return tmp;
+}
+int GetSize (int SocketClient,string &buffer){
+    buffer.resize(sizeof(int));
+    read(SocketClient,buffer.data(),sizeof(int));
+    int* aux=(int*)buffer.data();
+    int size=*aux;
+    return size;
+}
+
+void sendFile(int SocketClient) {
+    string filepath;
+    cout << "Enter file path: ";
+    getline(cin, filepath);
+    Eigen::MatrixXd owo = readCSV(filepath);
+    int rows = owo.rows();
+    int cols = owo.cols();
+    string header = "f";
+    write(SocketClient, header.data(), header.size());
+    write(SocketClient, &rows, sizeof(int));
+    write(SocketClient, &cols, sizeof(int));
+    write(SocketClient, owo.data(), owo.size() * sizeof(double));
+}
+
+int main(int argc, char * argv[]){
+    signal(SIGINT, signalHandler);
+    int portNumber;
 
     if (argc>=2){
         portNumber=atoi(argv[1]);
@@ -33,10 +121,10 @@ int main(int argc, char * argv[]){
         portNumber=PORT;
     }
 
-    cout<<"UwU"<<endl;
 
     struct sockaddr_in stSockAddr;
     int SocketClient = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    globalSocketClient = SocketClient;
 
     memset(&stSockAddr, 0, sizeof(struct sockaddr_in));
     
@@ -52,7 +140,6 @@ int main(int argc, char * argv[]){
 
     connect(SocketClient, (const struct sockaddr *)&stSockAddr, sizeof(struct sockaddr_in));
 
-    cout<<"UwU"<<endl;
     int aux;
     string line;
     bool flag1=true;
@@ -66,13 +153,10 @@ int main(int argc, char * argv[]){
     read(SocketClient,readBuffer.data(),1);
 
     if (readBuffer=="C"){
-        cout<<"Successfull Connection"<<endl;
+        cout << "Successfull Connection" << endl;
     }
     else if (readBuffer=="X"){
-        readBuffer.resize(4);
-        read(SocketClient,readBuffer.data(),4);
-        int* aux=(int*)readBuffer.data();
-        int size=*aux;
+        int size = GetSize(SocketClient, readBuffer);
         readBuffer.resize(size);
         read(SocketClient,readBuffer.data(),size);
         cout<<readBuffer<<endl;
@@ -80,72 +164,10 @@ int main(int argc, char * argv[]){
         write(SocketClient,writeBuffer.data(),writeBuffer.size());
         close(SocketClient);
     }
+    sendFile(SocketClient);
 
-    while (1);
-    
-
-    // while (flag1){
-
-    //     cout<<nickname1<<" select an action:\n"<<
-    //     "1 Change nickname.\n"<<
-    //     "2 Send private message.\n"<<
-    //     "3 Send broadcast.\n"<<
-    //     "4 List all chat members.\n"<<
-    //     "5 Send file.\n"<<
-    //     "6 Play TikTakToe.\n"<<
-    //     "0 Exit chat."<<endl;
-
-    //     getline(cin, line);
-    //     aux = stoi(line);  
-        
-    //     switch (aux)
-    //     {
-    //     case 1://n
-    //         updateNickname(SocketClient);
-    //         break;
-    //     case 2://t
-    //         privateMessage(SocketClient);
-    //         break;
-    //     case 3://m
-    //         broadcast(SocketClient);
-    //         break;
-    //     case 4://l
-    //         buffer="l";
-    //         write(SocketClient,buffer.data(),1);
-    //         break;
-    //     case 5://f
-    //         sendFile(SocketClient);
-    //         break;
-    //     case 6://f
-    //         buffer="p";
-    //         write(SocketClient,buffer.data(),1);
-    //         break;
-        
-    //     case 0://x
-    //         {
-    //             string confirm;
-    //             cout<<"Are you sure you want to exit?(y/n)"<<endl;
-    //             getline(cin, confirm);
-    //             if (confirm[0]=='y') {
-    //                 buffer="x";
-    //                 fullmessage1=buffer;
-    //                 cout<<fullmessage1<<endl;
-    //                 write(SocketClient,buffer.data(),1);
-    //                 flag=false;
-    //                 t1.join();
-    //                 shutdown(SocketClient, SHUT_RDWR);
-    //                 close(SocketClient);
-    //                 flag1=false;
-    //             } else if (confirm[0]=='n') continue;
-    //             break;
-    //         }
-        
-    //     default:
-    //         cout<<"Please, enter a valid option."<<endl;
-    //         break;
-    //     }
-    // }
-
+    while (1){
+        sleep(10);
+    };
     return 0;
-
 }
