@@ -17,13 +17,26 @@
 #include <fstream>
 #include <iterator>
 #include <Eigen/Dense>
+#include <random>
 #define PORT 8080
 
 using namespace std;
 
 int seed;
-
+int K,P;
 int nProcessor,nProcessors;
+
+void generateOmega_identical(int N, int l, unsigned long long seed, Eigen::MatrixXd &Omega) {
+    Omega.resize(N, l);
+    std::mt19937_64 rng(seed);
+    std::normal_distribution<double> gauss(0.0, 1.0);
+
+    for (int j = 0; j < l; ++j) {
+        for (int i = 0; i < N; ++i) {
+            Omega(i, j) = gauss(rng);
+        }
+    }
+}
 
 int main(int argc, char * argv[]){
     int portNumber;
@@ -72,9 +85,11 @@ int main(int argc, char * argv[]){
 
     if (readBuffer=="G"){
         read(SocketClient,&seed,sizeof(int));
+        read(SocketClient,&K,sizeof(int));
+        read(SocketClient,&P,sizeof(int));
     }
 
-    cout<<seed<<endl;
+    cout<<seed<<" "<< K<<" " << P<<endl;
 
     readBuffer.resize(1);
 
@@ -83,11 +98,31 @@ int main(int argc, char * argv[]){
     if (readBuffer=="E"){
         read(SocketClient,&nProcessor,sizeof(int));
         read(SocketClient,&nProcessors,sizeof(int));
+                cout<<readBuffer<< " "<< nProcessor << " "<< nProcessors<<endl;
     }
+    readBuffer.resize(1);
 
-    while (1);
-    
+    read(SocketClient,readBuffer.data(),readBuffer.size());
 
+    int rows,cols;
+    Eigen::MatrixXd A_R;
+    if (readBuffer=="T"){
+
+        read(SocketClient,&rows,sizeof(int));
+        read(SocketClient,&cols,sizeof(int));
+        cout<<readBuffer<< " "<< rows << " "<< cols<<endl;
+        A_R=Eigen::MatrixXd (rows,cols);
+
+        read(SocketClient,A_R.data(),A_R.size()*sizeof(double));
+
+        cout<<A_R<<endl;
+    }
+    Eigen::MatrixXd Omega;
+    generateOmega_identical(rows, P + K, seed, Omega);
+    cout<<Omega<<endl;
+
+    writeBuffer= "q";
+    close(SocketClient);
     return 0;
 
 }

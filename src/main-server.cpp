@@ -99,13 +99,22 @@ string formatSize(int value, int n) {
     return oss.str();
 }
 
-void sendSeed(ThreadData &thread){
+void sendSeedKP(ThreadData &thread){
     string value;
     value.resize(sizeof(int));
     for (int i=0;i<sizeof(int);i++){
         value[i]=*(((char*)&seed)+i);
     }
     thread.writeBuffer="G"+value;
+    for (int i=0;i<sizeof(int);i++){
+        value[i]=*(((char*)&K)+i);
+    }
+    thread.writeBuffer+=value;
+    for (int i=0;i<sizeof(int);i++){
+        value[i]=*(((char*)&P)+i);
+    }
+    thread.writeBuffer+=value;
+
     write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
     thread.log_buffer=thread.writeBuffer;
     cout<<thread.log_buffer<<endl;
@@ -113,7 +122,7 @@ void sendSeed(ThreadData &thread){
 
 void sendSeedToProcessors(){
     for (auto processor:connectedProcessors){
-        sendSeed(*(processor.second));
+        sendSeedKP(*(processor.second));
     }
 }
 
@@ -142,7 +151,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
         cout<<thread.log_buffer;
         write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
-        auto aux=receivedMat.block(startRow,0,lastProcessor,nCols);
+        Eigen::MatrixXd aux=receivedMat.block(startRow,0,lastProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         cout<<aux;
     }
@@ -163,7 +172,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
         cout<<thread.log_buffer;
         write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
-        auto aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
+        Eigen::MatrixXd aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         cout<<aux;
     }
@@ -184,12 +193,18 @@ void assingWork(){
         for (int i=0;i<sizeof(int);i++){
             value[i]=*(((char*)&nProcessors)+i);
         }
-        nProcessor++;
+        
         processor.second->writeBuffer=processor.second->writeBuffer+value;
         processor.second->log_buffer=processor.second->writeBuffer;
+        cout<< processor.second->writeBuffer<<endl;
+
+
+
+        cout<< nProcessor << " "<< value<< endl;
         cout<<"Sent:" <<processor.second->log_buffer<<endl;
         write(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
         sendChunkOfMatrix(*(processor.second),nProcessor);
+        nProcessor++;
     }
 }
 
@@ -250,7 +265,7 @@ void readSocket(int SocketClient){
                 connectedClient=0;
             }
             else if (connectedProcessors.find(SocketClient)!=connectedProcessors.end()){
-                connectedProcessors.erase(connectedProcessors.find(SocketClient));
+                connectedProcessors.erase(SocketClient);
             }
             flag1=false;
             break;
