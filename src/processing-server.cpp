@@ -122,6 +122,8 @@ int main(int argc, char * argv[]){
     cout<<Omega<<endl;
 
     writeBuffer= "q";
+    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+    shutdown(SocketClient, SHUT_RDWR);
     close(SocketClient);
     return 0;
 
