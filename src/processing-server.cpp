@@ -21,6 +21,8 @@
 
 using namespace std;
 
+int seed;
+
 int main(int argc, char * argv[]){
     int portNumber;
 
@@ -59,76 +61,24 @@ int main(int argc, char * argv[]){
 
     string writeBuffer="s";
     string readBuffer;
-    readBuffer.resize(1);
 
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
 
     cout<<"Processor Connected\n";
 
+    
+    readBuffer.resize(1);
+
+    read(SocketClient,readBuffer.data(),readBuffer.size());
+
+    if (readBuffer=="G"){
+        read(SocketClient,&seed,sizeof(int));
+    }
+
+    cout<<seed<<endl;
+
     while (1);
     
-
-    // while (flag1){
-
-    //     cout<<nickname1<<" select an action:\n"<<
-    //     "1 Change nickname.\n"<<
-    //     "2 Send private message.\n"<<
-    //     "3 Send broadcast.\n"<<
-    //     "sizeof(int) List all chat members.\n"<<
-    //     "5 Send file.\n"<<
-    //     "6 Play TikTakToe.\n"<<
-    //     "0 Exit chat."<<endl;
-
-    //     getline(cin, line);
-    //     aux = stoi(line);  
-        
-    //     switch (aux)
-    //     {
-    //     case 1://n
-    //         updateNickname(SocketClient);
-    //         break;
-    //     case 2://t
-    //         privateMessage(SocketClient);
-    //         break;
-    //     case 3://m
-    //         broadcast(SocketClient);
-    //         break;
-    //     case sizeof(int)://l
-    //         buffer="l";
-    //         write(SocketClient,buffer.data(),1);
-    //         break;
-    //     case 5://f
-    //         sendFile(SocketClient);
-    //         break;
-    //     case 6://f
-    //         buffer="p";
-    //         write(SocketClient,buffer.data(),1);
-    //         break;
-        
-    //     case 0://x
-    //         {
-    //             string confirm;
-    //             cout<<"Are you sure you want to exit?(y/n)"<<endl;
-    //             getline(cin, confirm);
-    //             if (confirm[0]=='y') {
-    //                 buffer="x";
-    //                 fullmessage1=buffer;
-    //                 cout<<fullmessage1<<endl;
-    //                 write(SocketClient,buffer.data(),1);
-    //                 flag=false;
-    //                 t1.join();
-    //                 shutdown(SocketClient, SHUT_RDWR);
-    //                 close(SocketClient);
-    //                 flag1=false;
-    //             } else if (confirm[0]=='n') continue;
-    //             break;
-    //         }
-        
-    //     default:
-    //         cout<<"Please, enter a valid option."<<endl;
-    //         break;
-    //     }
-    // }
 
     return 0;
 

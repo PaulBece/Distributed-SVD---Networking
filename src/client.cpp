@@ -96,10 +96,16 @@ int GetSize (int SocketClient,string &buffer){
     return size;
 }
 
-void sendFile(int SocketClient) {
+void sendMatrix(int SocketClient) {
     string filepath;
-    cout << "Enter file path: ";
+    int K,P;
+    cout << "Enter file name: ";
     getline(cin, filepath);
+    cout << "Enter K value: ";
+    cin>>K;
+    cout << "Enter P value: ";
+    cin>>P;
+    cout<<K<<" "<<P<<endl;
     filepath="data/"+filepath;
     Eigen::MatrixXd owo = readCSV(filepath);
     int rows = owo.rows();
@@ -109,6 +115,8 @@ void sendFile(int SocketClient) {
     write(SocketClient, &rows, sizeof(int));
     write(SocketClient, &cols, sizeof(int));
     write(SocketClient, owo.data(), owo.size() * sizeof(double));
+    write(SocketClient,&K,sizeof(int));
+    write(SocketClient,&P,sizeof(int));
 }
 
 int main(int argc, char * argv[]){
@@ -165,7 +173,7 @@ int main(int argc, char * argv[]){
         write(SocketClient,writeBuffer.data(),writeBuffer.size());
         close(SocketClient);
     }
-    sendFile(SocketClient);
+    sendMatrix(SocketClient);
 
     while (1){
         sleep(10);

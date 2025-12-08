@@ -25,10 +25,24 @@
 
 using namespace std;
 
-unordered_set<int> connectedProcessors;
+struct ThreadData{
+    string writeBuffer;
+    string readBuffer;
+    int SocketClient;
+    string log_buffer;
+    ThreadData(int SocketClient): SocketClient(SocketClient){}
+
+};
+
+unordered_map<int,ThreadData*> connectedProcessors;
 int connectedClient=0;
-string log_buffer;
 int globalServerSocket = -1;
+
+int seed;
+
+int K,P;
+
+
 
 // <--- 3. Manejador de señal para el servidor
 void signalHandler(int signum) {
@@ -45,30 +59,34 @@ void signalHandler(int signum) {
     exit(signum);
 }
 
-int GetSize (int SocketClient,string &buffer){
-    buffer.resize(sizeof(int));
-    read(SocketClient,buffer.data(),sizeof(int));
-    log_buffer += buffer;
-    int* aux=(int*)buffer.data();
+int GetSize (ThreadData &thread){
+    thread.readBuffer.resize(sizeof(int));
+    read(thread.SocketClient,thread.readBuffer.data(),sizeof(int));
+    thread.log_buffer += thread.readBuffer;
+    int* aux=(int*)thread.readBuffer.data();
     int size=*aux;
     return size;
 }
 
-void readN(int SocketClient, string &readBuffer, int UnU = -1){
+void genSeed(){
+    seed=rand();
+}
+
+void readN(ThreadData &thread, int UnU = -1){
     int n;
     if(UnU == -1){
-        n = GetSize(SocketClient, readBuffer);
+        n = GetSize(thread);
     }
     else{
         n = UnU;
     }
-    readBuffer.resize(n);
+    thread.readBuffer.resize(n);
     int tmp2=n; 
     int tmp3=0;
     while(tmp2>0){
         int c;
-        c=read(SocketClient,readBuffer.data()+tmp3,min(1000,tmp2));
-        log_buffer += readBuffer;
+        c=read(thread.SocketClient,thread.readBuffer.data()+tmp3,min(1000,tmp2));
+        thread.log_buffer += thread.readBuffer;
         tmp2-=c;
         tmp3+=c;
     }
@@ -80,33 +98,50 @@ string formatSize(int value, int n) {
     return oss.str();
 }
 
+void sendSeed(ThreadData &thread){
+    string value;
+    value.resize(sizeof(int));
+    for (int i=0;i<sizeof(int);i++){
+        value[i]=*(((char*)&seed)+i);
+    }
+    thread.writeBuffer="G"+value;
+    write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+    thread.log_buffer=thread.writeBuffer;
+    cout<<thread.log_buffer<<endl;
+}
+
+void sendSeedToProcessors(){
+    for (auto processor:connectedProcessors){
+        sendSeed(*(processor.second));
+    }
+}
+
 
 void readSocket(int SocketClient){
-    string readBuffer;
-    string writeBuffer;
+    ThreadData thread(SocketClient);
     bool flag1=true;
 
     while (flag1){
-        readBuffer.resize(1);
-        read(SocketClient,readBuffer.data(),1);
-        log_buffer=readBuffer;
+        thread.readBuffer.resize(1);
+        read(SocketClient,thread.readBuffer.data(),1);
+        thread.log_buffer=thread.readBuffer;
 
-        switch (readBuffer[0])
+        switch (thread.readBuffer[0])
         {
         case 's':
-            cout<<"Received:" <<log_buffer<<endl;
-            connectedProcessors.insert(SocketClient);
+            cout<<"Received:" <<thread.log_buffer<<endl;
+            connectedProcessors.insert(pair<int,ThreadData*>(SocketClient,&thread));
             break;
         
         case 'c':
             {
-                cout<<"Received:" <<log_buffer<<endl;
+                cout<<"Received:" <<thread.log_buffer<<endl;
                 if (connectedClient==0){
                     connectedClient=SocketClient;
-                    writeBuffer="C";
-                    log_buffer=writeBuffer;
-                    cout<<"Sent:" <<log_buffer<<endl;
-                    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+                    thread.writeBuffer="C";
+                    thread.log_buffer=thread.writeBuffer;
+                    cout<<"Sent:" <<thread.log_buffer<<endl;
+                    write(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 }
                 else {
                     string error="Connection Error";
@@ -125,16 +160,16 @@ void readSocket(int SocketClient){
                         str2[i] = *(((char*)&size) + i);
                     }
 
-                    writeBuffer="X"+str2+str1;
-                    log_buffer=writeBuffer;
-                    cout<<"Sent:" <<log_buffer<<endl;
-                    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+                    thread.writeBuffer="X"+str2+str1;
+                    thread.log_buffer=thread.writeBuffer;
+                    cout<<"Sent:" <<thread.log_buffer<<endl;
+                    write(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 }
             }
             break;
 
         case 'q':
-            cout<<"Received:" <<log_buffer<<endl;
+            cout<<"Received:" <<thread.log_buffer<<endl;
             if (connectedClient==SocketClient){
                 connectedClient=0;
             }
@@ -145,14 +180,21 @@ void readSocket(int SocketClient){
             break;
         case 'f': 
             {
-            int rows = GetSize(SocketClient, readBuffer);
-            int cols = GetSize(SocketClient, readBuffer);
-            cout<<"Received:" <<log_buffer<<endl;
+            int rows = GetSize(thread);
+            int cols = GetSize(thread);
+            cout<<"Received:" <<thread.log_buffer<<endl;
             int datasize = rows * cols * sizeof(double);
             Eigen::MatrixXd receivedMat(rows, cols);
             read(SocketClient, receivedMat.data(), datasize);
+            read(SocketClient,&K,sizeof(int));
+            read(SocketClient,&P,sizeof(int));
             cout << "Matriz Recibida:" << endl;
             cout << receivedMat << endl;
+            cout<<endl;
+            cout<<K<<" "<<P<<endl;
+            genSeed();
+            cout<<seed<<endl;
+            sendSeedToProcessors();
             break;
             }
         default:
