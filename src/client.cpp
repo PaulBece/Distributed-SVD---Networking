@@ -100,6 +100,7 @@ void sendFile(int SocketClient) {
     string filepath;
     cout << "Enter file path: ";
     getline(cin, filepath);
+    filepath="data/"+filepath;
     Eigen::MatrixXd owo = readCSV(filepath);
     int rows = owo.rows();
     int cols = owo.cols();
