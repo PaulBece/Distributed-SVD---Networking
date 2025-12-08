@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <Eigen/Dense>
 #include <csignal>
+#include <random>
 
 #define PORT 8080
 
@@ -42,7 +43,7 @@ int seed;
 
 int K,P;
 
-
+Eigen::MatrixXd receivedMat;
 
 // <--- 3. Manejador de señal para el servidor
 void signalHandler(int signum) {
@@ -116,6 +117,81 @@ void sendSeedToProcessors(){
     }
 }
 
+void sendChunkOfMatrix(ThreadData thread,int nProcessor){
+    int nProcessors=connectedProcessors.size();
+    int nRowsPerProcessor=receivedMat.rows()/nProcessors;
+    int lastProcessor=receivedMat.rows()%nProcessors+nRowsPerProcessor;
+    int startRow;
+    startRow=nRowsPerProcessor*nProcessor;
+    int nCols=receivedMat.cols();
+
+    if (nProcessor==nProcessors-1){
+        thread.writeBuffer="T";
+        string value;
+        value.resize(sizeof(int));
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&lastProcessor)+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&(nCols))+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+        thread.log_buffer=thread.writeBuffer;
+        cout<<thread.log_buffer;
+        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+
+        auto aux=receivedMat.block(startRow,0,lastProcessor,nCols);
+        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        cout<<aux;
+    }
+    else{
+        thread.writeBuffer="T";
+        string value;
+        value.resize(sizeof(int));
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&nRowsPerProcessor)+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&(nCols))+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+        thread.log_buffer=thread.writeBuffer;
+        cout<<thread.log_buffer;
+        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+
+        auto aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
+        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        cout<<aux;
+    }
+}
+
+void assingWork(){
+    int nProcessors=connectedProcessors.size();
+    int nProcessor=0;
+    for (auto processor:connectedProcessors){
+
+        processor.second->writeBuffer="E";
+        string value;
+        value.resize(sizeof(int));
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&nProcessor)+i);
+        }
+        processor.second->writeBuffer=processor.second->writeBuffer+value;
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&nProcessors)+i);
+        }
+        nProcessor++;
+        processor.second->writeBuffer=processor.second->writeBuffer+value;
+        processor.second->log_buffer=processor.second->writeBuffer;
+        cout<<"Sent:" <<processor.second->log_buffer<<endl;
+        write(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
+        sendChunkOfMatrix(*(processor.second),nProcessor);
+    }
+}
 
 void readSocket(int SocketClient){
     ThreadData thread(SocketClient);
@@ -184,7 +260,7 @@ void readSocket(int SocketClient){
             int cols = GetSize(thread);
             cout<<"Received:" <<thread.log_buffer<<endl;
             int datasize = rows * cols * sizeof(double);
-            Eigen::MatrixXd receivedMat(rows, cols);
+            receivedMat=Eigen::MatrixXd (rows, cols);
             read(SocketClient, receivedMat.data(), datasize);
             read(SocketClient,&K,sizeof(int));
             read(SocketClient,&P,sizeof(int));
@@ -195,6 +271,7 @@ void readSocket(int SocketClient){
             genSeed();
             cout<<seed<<endl;
             sendSeedToProcessors();
+            assingWork();
             break;
             }
         default:

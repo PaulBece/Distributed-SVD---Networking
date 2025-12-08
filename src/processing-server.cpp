@@ -23,10 +23,11 @@ using namespace std;
 
 int seed;
 
+int nProcessor,nProcessors;
+
 int main(int argc, char * argv[]){
     int portNumber;
 
-    cout<<"UwU"<<endl;
 
     if (argc>=2){
         portNumber=atoi(argv[1]);
@@ -35,7 +36,6 @@ int main(int argc, char * argv[]){
         portNumber=PORT;
     }
 
-    cout<<"UwU"<<endl;
 
     struct sockaddr_in stSockAddr;
     int SocketClient = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -54,7 +54,6 @@ int main(int argc, char * argv[]){
 
     connect(SocketClient, (const struct sockaddr *)&stSockAddr, sizeof(struct sockaddr_in));
 
-    cout<<"UwU"<<endl;
     int aux;
     string line;
     bool flag1=true;
@@ -76,6 +75,15 @@ int main(int argc, char * argv[]){
     }
 
     cout<<seed<<endl;
+
+    readBuffer.resize(1);
+
+    read(SocketClient,readBuffer.data(),readBuffer.size());
+
+    if (readBuffer=="E"){
+        read(SocketClient,&nProcessor,sizeof(int));
+        read(SocketClient,&nProcessors,sizeof(int));
+    }
 
     while (1);
     
