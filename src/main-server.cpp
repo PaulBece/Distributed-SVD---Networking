@@ -138,6 +138,7 @@ void sendSeedToProcessors(){
 }
 
 void sendChunkOfMatrix(ThreadData thread,int nProcessor){
+    cout<< "sendChunkOfMatrix"<<endl;
     int nProcessors=connectedProcessors.size();
     int nRowsPerProcessor=receivedMat.rows()/nProcessors;
     int lastProcessor=receivedMat.rows()%nProcessors+nRowsPerProcessor;
@@ -164,7 +165,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,lastProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<aux<<endl;
+        //cout<<aux<<endl;
     }
     else{
         thread.writeBuffer="T";
@@ -185,7 +186,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<aux<<endl;
+        //cout<<aux<<endl;
     }
 }
 
@@ -404,7 +405,7 @@ void readSocket(int SocketClient){
             read(SocketClient,&K,sizeof(int));
             read(SocketClient,&P,sizeof(int));
             cout << "Matriz Recibida:" << endl;
-            cout << receivedMat << endl;
+            //cout << receivedMat << endl;
             cout<<endl;
             cout<<"K and P: "<<K<<" "<<P<<endl;
             genSeed();

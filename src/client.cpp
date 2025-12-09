@@ -22,7 +22,7 @@
 #define PORT 8080
 
 using namespace std;
-
+Eigen::MatrixXd  owo;
 // <--- 2. Variable Global para poder accederla desde el signal handler
 int globalSocketClient = -1; 
 
@@ -107,7 +107,7 @@ void sendMatrix(int SocketClient) {
     cin>>P;
     cout<<K<<" "<<P<<endl;
     filepath="data/"+filepath;
-    Eigen::MatrixXd owo = readCSV(filepath);
+    owo = readCSV(filepath);
     int rows = owo.rows();
     int cols = owo.cols();
     string header = "f";
@@ -140,6 +140,48 @@ Eigen::VectorXd getVectorXD(int SocketClient,string &readBuffer){
     read(SocketClient,Vector.data(),Vector.size()*sizeof(double));
 
     return Vector;
+}
+
+void calculateAndPrintPrecision(const Eigen::MatrixXd &A, 
+                                const Eigen::MatrixXd &U, 
+                                const Eigen::VectorXd &Sigma, 
+                                const Eigen::MatrixXd &VT) {
+    
+    cout << "\n--- CALCULANDO PRECISION DEL SVD ---" << endl;
+
+    // 1. Reconstruir la matriz aproximada: A' = U * Sigma * VT
+    // Sigma es un vector, usamos .asDiagonal() para hacerlo matriz cuadrada
+    Eigen::MatrixXd A_approx = U * Sigma.asDiagonal() * VT;
+
+    // 2. Calcular la matriz de diferencia (Residuos)
+    Eigen::MatrixXd Diff = A - A_approx;
+
+    // 3. Calcular la Norma de Frobenius (La magnitud del error)
+    // Eigen .norm() calcula la norma de Frobenius por defecto
+    double errorNorm = Diff.norm();
+    double originalNorm = A.norm();
+
+    // 4. Calcular el Error Relativo (Más útil para entender el porcentaje)
+    double relativeError = 0.0;
+    if (originalNorm > 1e-9) { // Evitar división por cero
+        relativeError = errorNorm / originalNorm;
+    }
+
+    // 5. Mostrar resultados
+    cout << "Dimensiones Originales: " << A.rows() << "x" << A.cols() << endl;
+    cout << "Dimensiones Reconstruidas: " << A_approx.rows() << "x" << A_approx.cols() << endl;
+    cout << "-----------------------------------" << endl;
+    cout << "Norma de la Matriz Original: " << originalNorm << endl;
+    cout << "Norma del Error (Frobenius): " << errorNorm << endl;
+    cout << "Error Relativo: " << (relativeError * 100.0) << " %" << endl;
+    cout << "Precision (1 - Error): " << ((1.0 - relativeError) * 100.0) << " %" << endl;
+    
+    // Opcional: Mostrar una pequeña comparativa visual
+    if (A.rows() <= 10 && A.cols() <= 10) {
+        cout << "\nComparativa Visual (Primeras filas):" << endl;
+        cout << "ORIGINAL:\n" << A << endl;
+        cout << "RECONSTRUIDA:\n" << A_approx << endl;
+    }
 }
 
 int main(int argc, char * argv[]){
@@ -219,6 +261,8 @@ int main(int argc, char * argv[]){
         cout<<"VT"<<endl;
         cout<<VT<<endl;
     }
+
+    calculateAndPrintPrecision(owo, U, Sigma,VT);
 
     return 0;
 }
