@@ -126,7 +126,7 @@ void sendSeedKP(ThreadData &thread){
 
     write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
     thread.log_buffer=thread.writeBuffer;
-    cout<<thread.log_buffer<<endl;
+    cout<<"Sent: "<<thread.log_buffer<<endl;
 }
 
 void sendSeedToProcessors(){
@@ -162,7 +162,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,lastProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<aux;
+        cout<<aux<<endl;
     }
     else{
         thread.writeBuffer="T";
@@ -183,7 +183,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<aux;
+        cout<<aux<<endl;
     }
 }
 
@@ -205,9 +205,9 @@ void assingWork(){
         
         processor.second->writeBuffer=processor.second->writeBuffer+value;
         processor.second->log_buffer=processor.second->writeBuffer;
-        cout<< processor.second->writeBuffer<<endl;
+        //cout<< processor.second->writeBuffer<<endl;
 
-        cout<< nProcessor << " "<< value<< endl;
+        cout<<"nProcessor and nProcessors: " <<nProcessor << " "<< nProcessors<< endl;
         cout<<"Sent:" <<processor.second->log_buffer<<endl;
         write(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
         sendChunkOfMatrix(*(processor.second),nProcessor);
@@ -230,7 +230,7 @@ void stackMatrixR(bool U=false){
     }
     else{
         cout << "Dimensiones finales de R_stack: " << totalRowsStack << " x " << L << endl;
-    }
+    }    
     
     R_stack= Eigen::MatrixXd (totalRowsStack, L);
     int currentRow = 0;
@@ -238,6 +238,13 @@ void stackMatrixR(bool U=false){
         R_stack.block(currentRow, 0, r.rows(), L) = r;
         currentRow += r.rows();
     }
+
+    if(U){
+        cout<<"U: "<<R_stack<<endl;
+    }
+    else{
+        cout<<"R_stack: "<<R_stack<<endl;
+    }  
 
     vecMatrix.clear();
 }
@@ -268,7 +275,7 @@ void sendU(ThreadData &thread){
 
         Eigen::MatrixXd aux=U_distributed.block(startRow,0,lastProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<aux;
+        cout<<"Sent: "<<aux<<endl;
     }
     else{
         string value;
@@ -288,7 +295,7 @@ void sendU(ThreadData &thread){
 
         Eigen::MatrixXd aux=U_distributed.block(startRow,0,nRowsPerProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<aux;
+        cout<<"Sent: "<<aux<<endl;
     }
 }
 
@@ -398,9 +405,9 @@ void readSocket(int SocketClient){
             cout << "Matriz Recibida:" << endl;
             cout << receivedMat << endl;
             cout<<endl;
-            cout<<K<<" "<<P<<endl;
+            cout<<"K and P: "<<K<<" "<<P<<endl;
             genSeed();
-            cout<<seed<<endl;
+            cout<<"Seed: "<<seed<<endl;
             sendSeedToProcessors();
             assingWork();
             vecMatrix.resize(connectedProcessors.size());
@@ -415,43 +422,62 @@ void readSocket(int SocketClient){
             read (SocketClient, R_k.data(), rows*cols*sizeof(double));
             while(1){
                 if(Mutex.try_lock()){
-                n_R++;
-                Mutex.unlock();
-                break;
+                    n_R++;
+                    Mutex.unlock();
+                    break;
                 }
                 sleep(10);
             }
             vecMatrix[thread.numProcessor]=R_k;
             if(n_R==connectedProcessors.size()){
-                stackMatrixR(true);
+                n_R=0;
+                stackMatrixR();
                 SVD();
             }
             break;
         }
         case 'u':
         {
-            n_R=0;
+            cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             int rows,cols;
             read(SocketClient,&rows,sizeof(int));
             read(SocketClient,&cols,sizeof(int));
             Eigen::MatrixXd U_k ( rows , cols);
             read (SocketClient, U_k.data(), rows*cols*sizeof(double));
             while(1){
-                if(Mutex.try_lock()){
+                Mutex.lock();
+                if (vecMatrix.size()==0){
+                    cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
+                    cout<<"RESIZE\n";
+                    vecMatrix.resize(connectedProcessors.size());
+                    cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
+                    cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
+                }
                 n_R++;
+                cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
                 Mutex.unlock();
                 break;
-                }
-                sleep(10);
             }
+            
+            
             vecMatrix[thread.numProcessor]=U_k;
-            if(n_R==connectedProcessors.size()){
+            if(thread.numProcessor+1==connectedProcessors.size()){
+                while (n_R!=connectedProcessors.size()){
+                    sleep(10);
+                }
+                cout<<"inside if n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
                 stackMatrixR(true);
                 thread.writeBuffer="K";
+                write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                cout<<"sent K\n";
                 sendMatrixToClient(R_stack);
                 thread.writeBuffer="L";
+                write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                cout<<"sent L\n";
                 sendVectorXDToClient(Sigma);
                 thread.writeBuffer="M";
+                write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                cout<<"sent M\n";
                 sendMatrixToClient(VT);
             }
             break;

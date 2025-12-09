@@ -170,7 +170,9 @@ int main(int argc, char * argv[]){
         write(SocketClient,&U_cols,sizeof(int));
         write(SocketClient,U_resultante.data(),U_resultante.size()*sizeof(double));
     }
-    
+    while(1){
+        sleep(1000);
+    }
     writeBuffer= "q";
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
     shutdown(SocketClient, SHUT_RDWR);
