@@ -52,6 +52,8 @@ Eigen::MatrixXd R_stack;
 
 int n_R =0;
 mutex Mutex;
+mutex Mutex2;
+mutex Mutex3;
 
 Eigen::MatrixXd U_distributed;
 Eigen::VectorXd Sigma;
@@ -311,7 +313,6 @@ void SVD(){
 
     U_distributed = svd.matrixU();
     Sigma = svd.singularValues();
-    VT = svd.matrixV().transpose();
     cout<<"Owo"<<endl;
     assingWorkU();
 }
@@ -436,6 +437,49 @@ void readSocket(int SocketClient){
             }
             break;
         }
+        case 'a':{
+            cout<<"Case a:"<<endl;
+            cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            int rows,cols;
+            read(SocketClient,&rows,sizeof(int));
+            read(SocketClient,&cols,sizeof(int));
+            Eigen::MatrixXd UTA_k ( rows , cols);
+            read (SocketClient, UTA_k.data(), rows*cols*sizeof(double));
+            Mutex.lock();
+            if (vecMatrix.size()==0){
+                cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
+                cout<<"RESIZE\n";
+                vecMatrix.resize(connectedProcessors.size());
+                cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
+                cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
+            }
+            n_R++;
+            vecMatrix[thread.numProcessor]=UTA_k;
+            if (n_R==connectedProcessors.size()){
+                Mutex2.unlock();
+            }
+            cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            Mutex.unlock();
+            if(thread.numProcessor+1==connectedProcessors.size()){
+                Mutex2.lock();
+
+                VT= vecMatrix[0];
+                for (int i = 1; i < vecMatrix.size(); i++)
+                {
+                    VT+= vecMatrix[i];
+                }
+                Eigen::MatrixXd Sigma_Inverse = Sigma.asDiagonal().inverse();
+                VT = Sigma_Inverse * VT; //Ojito FE
+                cout<<"VT: "<<endl;
+                cout<<VT<<endl;
+                n_R=0;
+                vecMatrix.clear();
+                Mutex3.unlock();
+            } 
+            Mutex3.lock();
+            Mutex3.unlock();
+            break;
+        }
         case 'u':
         {
             cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
@@ -463,7 +507,7 @@ void readSocket(int SocketClient){
             vecMatrix[thread.numProcessor]=U_k;
             if(thread.numProcessor+1==connectedProcessors.size()){
                 while (n_R!=connectedProcessors.size()){
-                    sleep(10);
+                    sleep(1);
                 }
                 cout<<"inside if n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
                 stackMatrixR(true);
@@ -515,8 +559,8 @@ int main(int argc, char * argv[]){
     bind(SocketServer,(const struct sockaddr *)&stSockAddr, sizeof(struct sockaddr_in));
     listen(SocketServer, 10);
 
-
-
+    Mutex2.lock();
+    Mutex3.lock();
     vector<thread> threads;
 
     while (1){

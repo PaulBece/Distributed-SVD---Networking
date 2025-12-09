@@ -162,6 +162,16 @@ int main(int argc, char * argv[]){
         cout<< "U_Resultante: "<<endl;
         cout << U_resultante<< endl;
 
+        Eigen::MatrixXd UTA =  U_resultante.transpose() * A_R;
+        int UTA_rows=UTA.rows();
+        int UTA_cols=UTA.cols();
+        writeBuffer="a";
+        write(SocketClient,writeBuffer.data(),writeBuffer.size());
+        write(SocketClient,&UTA_rows,sizeof(int));
+        write(SocketClient,&UTA_cols,sizeof(int));
+        write(SocketClient,UTA.data(),UTA.size()*sizeof(double));
+
+
         int U_rows=U_resultante.rows();
         int U_cols=U_resultante.cols();
         writeBuffer="u";
@@ -169,6 +179,7 @@ int main(int argc, char * argv[]){
         write(SocketClient,&U_rows,sizeof(int));
         write(SocketClient,&U_cols,sizeof(int));
         write(SocketClient,U_resultante.data(),U_resultante.size()*sizeof(double));
+ 
     }
     while(1){
         sleep(1000);
