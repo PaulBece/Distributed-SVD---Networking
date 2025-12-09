@@ -58,7 +58,17 @@ mutex Mutex3;
 Eigen::MatrixXd U_distributed;
 Eigen::VectorXd Sigma;
 Eigen::MatrixXd VT;
-
+void readN2(int Socket, void * data, int size){
+    int n= size;
+    int tmp2=n; 
+    int tmp3=0;
+    while(tmp2>0){
+        int c;
+        c=read(Socket,((char *)data)+tmp3,min(1000,tmp2));
+        tmp2-=c;
+        tmp3+=c;
+    }
+}
 void signalHandler(int signum) {
     cout << "\nInterrupcion detectada (Ctrl+C). Apagando servidor..." << endl;
     
@@ -73,7 +83,7 @@ void signalHandler(int signum) {
 
 int GetSize (ThreadData &thread){
     thread.readBuffer.resize(sizeof(int));
-    read(thread.SocketClient,thread.readBuffer.data(),sizeof(int));
+    readN2(thread.SocketClient,thread.readBuffer.data(),sizeof(int));
     thread.log_buffer += thread.readBuffer;
     int* aux=(int*)thread.readBuffer.data();
     int size=*aux;
@@ -104,17 +114,7 @@ void readN(ThreadData &thread, int UnU = -1){
     }
 }
 
-void readN2(int Socket, char * data, int size){
-    int n;
-    int tmp2=n; 
-    int tmp3=0;
-    while(tmp2>0){
-        int c;
-        c=read(Socket,data+tmp3,min(1000,tmp2));
-        tmp2-=c;
-        tmp3+=c;
-    }
-}
+
 
 string formatSize(int value, int n) {
     std::ostringstream oss;
@@ -351,7 +351,7 @@ void readSocket(int SocketClient){
 
     while (flag1){
         thread.readBuffer.resize(1);
-        read(SocketClient,thread.readBuffer.data(),1);
+        readN2(SocketClient,thread.readBuffer.data(),1);
         thread.log_buffer=thread.readBuffer;
 
         switch (thread.readBuffer[0])
@@ -413,9 +413,9 @@ void readSocket(int SocketClient){
             cout<<"Received:" <<thread.log_buffer<<endl;
             int datasize = rows * cols * sizeof(double);
             receivedMat=Eigen::MatrixXd (rows, cols);
-            read(SocketClient, receivedMat.data(), datasize);
-            read(SocketClient,&K,sizeof(int));
-            read(SocketClient,&P,sizeof(int));
+            readN2(SocketClient, receivedMat.data(), datasize);
+            readN2(SocketClient,&K,sizeof(int));
+            readN2(SocketClient,&P,sizeof(int));
             cout << "Matriz Recibida:" << endl;
             //cout << receivedMat << endl;
             cout<<endl;
@@ -430,10 +430,10 @@ void readSocket(int SocketClient){
         case 'o':
         {
             int rows,cols;
-            read(SocketClient,&rows,sizeof(int));
-            read(SocketClient,&cols,sizeof(int));
+            readN2(SocketClient,&rows,sizeof(int));
+            readN2(SocketClient,&cols,sizeof(int));
             Eigen::MatrixXd R_k ( rows , cols);
-            read (SocketClient, R_k.data(), rows*cols*sizeof(double));
+            readN2 (SocketClient, R_k.data(), rows*cols*sizeof(double));
             while(1){
                 if(Mutex.try_lock()){
                     n_R++;
@@ -454,10 +454,10 @@ void readSocket(int SocketClient){
             cout<<"Case a:"<<endl;
             cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             int rows,cols;
-            read(SocketClient,&rows,sizeof(int));
-            read(SocketClient,&cols,sizeof(int));
+            readN2(SocketClient,&rows,sizeof(int));
+            readN2(SocketClient,&cols,sizeof(int));
             Eigen::MatrixXd UTA_k ( rows , cols);
-            read (SocketClient, UTA_k.data(), rows*cols*sizeof(double));
+            readN2 (SocketClient, UTA_k.data(), rows*cols*sizeof(double));
             Mutex.lock();
             if (vecMatrix.size()==0){
                 cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
@@ -497,10 +497,10 @@ void readSocket(int SocketClient){
         {
             cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             int rows,cols;
-            read(SocketClient,&rows,sizeof(int));
-            read(SocketClient,&cols,sizeof(int));
+            readN2(SocketClient,&rows,sizeof(int));
+            readN2(SocketClient,&cols,sizeof(int));
             Eigen::MatrixXd U_k ( rows , cols);
-            read (SocketClient, U_k.data(), rows*cols*sizeof(double));
+            readN2 (SocketClient, U_k.data(), rows*cols*sizeof(double));
             while(1){
                 Mutex.lock();
                 if (vecMatrix.size()==0){

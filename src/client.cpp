@@ -44,6 +44,18 @@ void signalHandler(int signum) {
     exit(signum); // Terminar el programa
 }
 
+void readN2(int Socket, void * data, int size){
+    int n= size;
+    int tmp2=n; 
+    int tmp3=0;
+    while(tmp2>0){
+        int c;
+        c=read(Socket,((char *)data)+tmp3,min(1000,tmp2));
+        tmp2-=c;
+        tmp3+=c;
+    }
+}
+
 Eigen::MatrixXd readCSV(const std::string &path) {
     std::ifstream indata;
     indata.open(path);
@@ -90,7 +102,7 @@ string CastIntToString(int n){
 }
 int GetSize (int SocketClient,string &buffer){
     buffer.resize(sizeof(int));
-    read(SocketClient,buffer.data(),sizeof(int));
+    readN2(SocketClient,buffer.data(),sizeof(int));
     int* aux=(int*)buffer.data();
     int size=*aux;
     return size;
@@ -121,23 +133,23 @@ void sendMatrix(int SocketClient) {
 
 Eigen::MatrixXd getMatrix(int SocketClient, string &readBuffer){
     int rows,cols;
-    read(SocketClient,&rows,sizeof(int));
-    read(SocketClient,&cols,sizeof(int));
+    readN2(SocketClient,&rows,sizeof(int));
+    readN2(SocketClient,&cols,sizeof(int));
     cout<<readBuffer<< " "<< rows<< " "<< cols<<endl;
     Eigen::MatrixXd matrix (rows,cols);
 
-    read(SocketClient,matrix.data(),matrix.size()*sizeof(double));
+    readN2(SocketClient,matrix.data(),matrix.size()*sizeof(double));
 
     return matrix;
 }
 
 Eigen::VectorXd getVectorXD(int SocketClient,string &readBuffer){
     int size;
-    read(SocketClient,&size,sizeof(int));
+    readN2(SocketClient,&size,sizeof(int));
     cout<<readBuffer<< " "<< size<<endl;
     Eigen::VectorXd Vector (size);
 
-    read(SocketClient,Vector.data(),Vector.size()*sizeof(double));
+    readN2(SocketClient,Vector.data(),Vector.size()*sizeof(double));
 
     return Vector;
 }
@@ -224,7 +236,7 @@ int main(int argc, char * argv[]){
 
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
 
-    read(SocketClient,readBuffer.data(),1);
+    readN2(SocketClient,readBuffer.data(),1);
 
     if (readBuffer=="C"){
         cout << "Successfull Connection" << endl;
@@ -232,7 +244,7 @@ int main(int argc, char * argv[]){
     else if (readBuffer=="X"){
         int size = GetSize(SocketClient, readBuffer);
         readBuffer.resize(size);
-        read(SocketClient,readBuffer.data(),size);
+        readN2(SocketClient,readBuffer.data(),size);
         cout<<readBuffer<<endl;
         writeBuffer="q";
         write(SocketClient,writeBuffer.data(),writeBuffer.size());
@@ -243,19 +255,19 @@ int main(int argc, char * argv[]){
     Eigen::VectorXd Sigma;
     Eigen::MatrixXd VT;
     readBuffer.resize(1);
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
     if(readBuffer=="K"){
         U=getMatrix(SocketClient,readBuffer);
         cout<<"U"<<endl;
         cout<<U<<endl;
     }
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
     if(readBuffer=="L"){
         Sigma= getVectorXD(SocketClient,readBuffer);
         cout<<"Sigma:"<<endl;
         cout<<Sigma<<endl;
     }
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
     if(readBuffer=="M"){
         VT=getMatrix(SocketClient,readBuffer);
         cout<<"VT"<<endl;

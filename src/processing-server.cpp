@@ -26,6 +26,18 @@ int seed;
 int K,P,L;
 int nProcessor,nProcessors;
 
+void readN2(int Socket, void * data, int size){
+    int n= size;
+    int tmp2=n; 
+    int tmp3=0;
+    while(tmp2>0){
+        int c;
+        c=read(Socket,((char *)data)+tmp3,min(1000,tmp2));
+        tmp2-=c;
+        tmp3+=c;
+    }
+}
+
 void generateOmega_identical(int N, int l, unsigned long long seed, Eigen::MatrixXd &Omega) {
     Omega.resize(N, l);
     std::mt19937_64 rng(seed);
@@ -81,12 +93,12 @@ int main(int argc, char * argv[]){
     
     readBuffer.resize(1);
 
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
 
     if (readBuffer=="G"){
-        read(SocketClient,&seed,sizeof(int));
-        read(SocketClient,&K,sizeof(int));
-        read(SocketClient,&P,sizeof(int));
+        readN2(SocketClient,&seed,sizeof(int));
+        readN2(SocketClient,&K,sizeof(int));
+        readN2(SocketClient,&P,sizeof(int));
     }
     L=K+P;
 
@@ -94,27 +106,27 @@ int main(int argc, char * argv[]){
 
     readBuffer.resize(1);
 
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
 
     if (readBuffer=="E"){
-        read(SocketClient,&nProcessor,sizeof(int));
-        read(SocketClient,&nProcessors,sizeof(int));
+        readN2(SocketClient,&nProcessor,sizeof(int));
+        readN2(SocketClient,&nProcessors,sizeof(int));
                 cout<<readBuffer<< " "<< nProcessor << " "<< nProcessors<<endl;
     }
     readBuffer.resize(1);
 
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
 
     int rows,cols;
     Eigen::MatrixXd A_R;
     if (readBuffer=="T"){
 
-        read(SocketClient,&rows,sizeof(int));
-        read(SocketClient,&cols,sizeof(int));
+        readN2(SocketClient,&rows,sizeof(int));
+        readN2(SocketClient,&cols,sizeof(int));
         cout<<readBuffer<< " "<< rows << " "<< cols<<endl;
         A_R=Eigen::MatrixXd (rows,cols);
 
-        read(SocketClient,A_R.data(),A_R.size()*sizeof(double));
+        readN2(SocketClient,A_R.data(),A_R.size()*sizeof(double));
 
         cout<<A_R<<endl;
     }
@@ -144,18 +156,18 @@ int main(int argc, char * argv[]){
 
 
     readBuffer.resize(1);
-    read(SocketClient,readBuffer.data(),readBuffer.size());
+    readN2(SocketClient,readBuffer.data(),readBuffer.size());
     int rowsU,colsU;
     Eigen::MatrixXd U_part;
     
     if (readBuffer=="U"){
 
-        read(SocketClient,&rowsU,sizeof(int));
-        read(SocketClient,&colsU,sizeof(int));
+        readN2(SocketClient,&rowsU,sizeof(int));
+        readN2(SocketClient,&colsU,sizeof(int));
         cout<<readBuffer<< " "<< rowsU << " "<< colsU<<endl;
         U_part=Eigen::MatrixXd (rowsU,colsU);
 
-        read(SocketClient,U_part.data(),U_part.size()*sizeof(double));
+        readN2(SocketClient,U_part.data(),U_part.size()*sizeof(double));
         cout<< "U_part: "<<endl;
         cout<<U_part<<endl;
         Eigen::MatrixXd U_resultante = Q_thin * U_part;
