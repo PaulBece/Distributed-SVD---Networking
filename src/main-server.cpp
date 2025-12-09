@@ -104,6 +104,18 @@ void readN(ThreadData &thread, int UnU = -1){
     }
 }
 
+void readN2(int Socket, char * data, int size){
+    int n;
+    int tmp2=n; 
+    int tmp3=0;
+    while(tmp2>0){
+        int c;
+        c=read(Socket,data+tmp3,min(1000,tmp2));
+        tmp2-=c;
+        tmp3+=c;
+    }
+}
+
 string formatSize(int value, int n) {
     std::ostringstream oss;
     oss << std::setw(n) << std::setfill('0') << value;
