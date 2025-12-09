@@ -122,19 +122,17 @@ int main(int argc, char * argv[]){
     generateOmega_identical(cols, min(P + K, cols), seed, Omega);
     cout<<"Omega:"<<endl;
     cout<<Omega<<endl;
-
+    Eigen::MatrixXd Y_local = A_R * Omega;
+    cout<< "Y_R: "<< endl;
+    cout<< Y_local<<endl;
     cout << "Computed Y_local of size " << Y_local.rows() << " x " << Y_local.cols() << endl;
 
-    // === Local QR: Y_local = Q0 * R0  (Q0: rows x l, R0: l x l) ===
     Eigen::HouseholderQR<Eigen::MatrixXd> qr_local(Y_local);
-    // get R0 (l x l) from the top rows of the compact qr matrix
-    Eigen::MatrixXd R0 = qr_local.matrixQR().topRows(l).template triangularView<Eigen::Upper>();
-    // Optionally keep Q0 compact or full; we will re-orthonormalize after getting R_final,
-    // so we don't need the full Q0 now. Keep Y_local to compute Z later.
+    int validRows = std::min((int)Y_local.rows(), L);
+    Eigen::MatrixXd R0 = qr_local.matrixQR().topRows(validRows).template triangularView<Eigen::Upper>();
     cout << "Computed local R0 (size " << R0.rows() << "x" << R0.cols() << ")\n";
-
-
-
+    cout<< "R: "<< endl;
+    cout<< R0<<endl;
     writeBuffer= "q";
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
     shutdown(SocketClient, SHUT_RDWR);
