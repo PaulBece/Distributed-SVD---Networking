@@ -133,10 +133,36 @@ int main(int argc, char * argv[]){
     cout << "Computed local R0 (size " << R0.rows() << "x" << R0.cols() << ")\n";
     cout<< "R: "<< endl;
     cout<< R0<<endl;
+    int R0_rows=R0.rows();
+    int R0_cols=R0.cols();
+    writeBuffer="o";
+    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+    write(SocketClient,&R0_rows,sizeof(int));
+    write(SocketClient,&R0_cols,sizeof(int));
+    write(SocketClient,R0.data(),R0.size()*sizeof(double));
+
+    readBuffer.resize(1);
+    read(SocketClient,readBuffer.data(),readBuffer.size());
+    int rowsU,colsU;
+    Eigen::MatrixXd U_part;
+    
+    if (readBuffer=="U"){
+
+        read(SocketClient,&rowsU,sizeof(int));
+        read(SocketClient,&colsU,sizeof(int));
+        cout<<readBuffer<< " "<< rowsU << " "<< colsU<<endl;
+        U_part=Eigen::MatrixXd (rowsU,colsU);
+
+        read(SocketClient,U_part.data(),U_part.size()*sizeof(double));
+        cout<< "U_part: "<<endl;
+        cout<<U_part<<endl;
+        //Eigen::MatrixXd U_resultante = qr_local * U_part;
+
+    }
+
     writeBuffer= "q";
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
     shutdown(SocketClient, SHUT_RDWR);
     close(SocketClient);
     return 0;
-
 }

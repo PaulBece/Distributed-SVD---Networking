@@ -21,6 +21,7 @@
 #include <Eigen/Dense>
 #include <csignal>
 #include <random>
+#include <mutex>
 
 #define PORT 8080
 
@@ -31,6 +32,7 @@ struct ThreadData{
     string readBuffer;
     int SocketClient;
     string log_buffer;
+    int numProcessor=-1;
     ThreadData(int SocketClient): SocketClient(SocketClient){}
 
 };
@@ -43,9 +45,18 @@ int seed;
 
 int K,P;
 
-Eigen::MatrixXd receivedMat;
+vector<Eigen::MatrixXd> vecMatrix;
 
-// <--- 3. Manejador de señal para el servidor
+Eigen::MatrixXd receivedMat;
+Eigen::MatrixXd R_stack;
+
+int n_R =0;
+mutex Mutex;
+
+Eigen::MatrixXd U_distributed;
+Eigen::VectorXd Sigma;
+Eigen::MatrixXd VT;
+
 void signalHandler(int signum) {
     cout << "\nInterrupcion detectada (Ctrl+C). Apagando servidor..." << endl;
     
@@ -198,14 +209,102 @@ void assingWork(){
         processor.second->log_buffer=processor.second->writeBuffer;
         cout<< processor.second->writeBuffer<<endl;
 
-
-
         cout<< nProcessor << " "<< value<< endl;
         cout<<"Sent:" <<processor.second->log_buffer<<endl;
         write(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
         sendChunkOfMatrix(*(processor.second),nProcessor);
+        processor.second->numProcessor=nProcessor;
         nProcessor++;
     }
+}
+
+void stackMatrixR(){
+    int L = vecMatrix[0].cols(); // El ancho L es constante para todos
+    int totalRowsStack = 0;
+
+    for(const auto& r : vecMatrix) {
+        totalRowsStack += r.rows();
+    }
+
+    cout << "Apilando " << vecMatrix.size() << " matrices." << endl;
+    cout << "Dimensiones finales de R_stack: " << totalRowsStack << " x " << L << endl;
+    R_stack= Eigen::MatrixXd (totalRowsStack, L);
+    int currentRow = 0;
+    for(const auto& r : vecMatrix) {
+        R_stack.block(currentRow, 0, r.rows(), L) = r;
+        currentRow += r.rows();
+    }
+
+    vecMatrix.clear();
+}
+
+
+
+void sendU(ThreadData &thread){
+    int nProcessors=connectedProcessors.size();
+    int nRowsPerProcessor=U_distributed.rows()/nProcessors;
+    int lastProcessor=U_distributed.rows()%nProcessors+nRowsPerProcessor;
+    int startRow;
+    startRow=nRowsPerProcessor*thread.numProcessor;
+    int nCols=U_distributed.cols();
+
+    if (thread.numProcessor==nProcessors-1){
+        string value;
+        value.resize(sizeof(int));
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&lastProcessor)+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&(nCols))+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+        thread.log_buffer=thread.writeBuffer;
+        cout<<thread.log_buffer;
+        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+
+        Eigen::MatrixXd aux=U_distributed.block(startRow,0,lastProcessor,nCols);
+        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        cout<<aux;
+    }
+    else{
+        string value;
+        value.resize(sizeof(int));
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&nRowsPerProcessor)+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+
+        for (int i=0;i<sizeof(int);i++){
+            value[i]=*(((char*)&(nCols))+i);
+        }
+        thread.writeBuffer=thread.writeBuffer+value;
+        thread.log_buffer=thread.writeBuffer;
+        cout<<thread.log_buffer;
+        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+
+        Eigen::MatrixXd aux=U_distributed.block(startRow,0,nRowsPerProcessor,nCols);
+        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        cout<<aux;
+    }
+}
+
+void assingWorkU(){
+    for (auto processor:connectedProcessors){
+        processor.second->writeBuffer="U";
+        sendU(*(processor.second));
+    }
+}
+
+void SVD(){
+    Eigen::BDCSVD<Eigen::MatrixXd> svd(R_stack, Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+    U_distributed = svd.matrixU();
+    Sigma = svd.singularValues();
+    VT = svd.matrixV().transpose();
+    cout<<"Owo"<<endl;
+    assingWorkU();
 }
 
 void readSocket(int SocketClient){
@@ -287,8 +386,32 @@ void readSocket(int SocketClient){
             cout<<seed<<endl;
             sendSeedToProcessors();
             assingWork();
+            vecMatrix.resize(connectedProcessors.size());
             break;
             }
+        case 'o':
+        {
+            int rows,cols;
+            read(SocketClient,&rows,sizeof(int));
+            read(SocketClient,&cols,sizeof(int));
+            Eigen::MatrixXd R_k ( rows , cols);
+            read (SocketClient, R_k.data(), rows*cols*sizeof(double));
+            while(1){
+                if(Mutex.try_lock()){
+                n_R++;
+                Mutex.unlock();
+                break;
+                }
+                sleep(10);
+            }
+            vecMatrix[thread.numProcessor]=R_k;
+            if(n_R==connectedProcessors.size()){
+                stackMatrixR();
+                cout<<"Unu"<<endl;
+                SVD();
+            }
+            break;
+        }
         default:
             break;
         }
