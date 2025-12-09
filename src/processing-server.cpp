@@ -23,7 +23,7 @@
 using namespace std;
 
 int seed;
-int K,P;
+int K,P,L;
 int nProcessor,nProcessors;
 
 void generateOmega_identical(int N, int l, unsigned long long seed, Eigen::MatrixXd &Omega) {
@@ -88,6 +88,7 @@ int main(int argc, char * argv[]){
         read(SocketClient,&K,sizeof(int));
         read(SocketClient,&P,sizeof(int));
     }
+    L=K+P;
 
     cout<<seed<<" "<< K<<" " << P<<endl;
 
@@ -120,6 +121,18 @@ int main(int argc, char * argv[]){
     Eigen::MatrixXd Omega;
     generateOmega_identical(rows, P + K, seed, Omega);
     cout<<Omega<<endl;
+
+    cout << "Computed Y_local of size " << Y_local.rows() << " x " << Y_local.cols() << endl;
+
+    // === Local QR: Y_local = Q0 * R0  (Q0: rows x l, R0: l x l) ===
+    Eigen::HouseholderQR<Eigen::MatrixXd> qr_local(Y_local);
+    // get R0 (l x l) from the top rows of the compact qr matrix
+    Eigen::MatrixXd R0 = qr_local.matrixQR().topRows(l).template triangularView<Eigen::Upper>();
+    // Optionally keep Q0 compact or full; we will re-orthonormalize after getting R_final,
+    // so we don't need the full Q0 now. Keep Y_local to compute Z later.
+    cout << "Computed local R0 (size " << R0.rows() << "x" << R0.cols() << ")\n";
+
+
 
     writeBuffer= "q";
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
