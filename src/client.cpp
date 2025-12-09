@@ -119,6 +119,29 @@ void sendMatrix(int SocketClient) {
     write(SocketClient,&P,sizeof(int));
 }
 
+Eigen::MatrixXd getMatrix(int SocketClient, string &readBuffer){
+    int rows,cols;
+    read(SocketClient,&rows,sizeof(int));
+    read(SocketClient,&cols,sizeof(int));
+    cout<<readBuffer<< " "<< rows<< " "<< cols<<endl;
+    Eigen::MatrixXd matrix (rows,cols);
+
+    read(SocketClient,matrix.data(),matrix.size()*sizeof(double));
+
+    return matrix;
+}
+
+Eigen::VectorXd getVectorXD(int SocketClient,string &readBuffer){
+    int size;
+    read(SocketClient,&size,sizeof(int));
+    cout<<readBuffer<< " "<< size<<endl;
+    Eigen::VectorXd Vector (size);
+
+    read(SocketClient,Vector.data(),Vector.size()*sizeof(double));
+
+    return Vector;
+}
+
 int main(int argc, char * argv[]){
     signal(SIGINT, signalHandler);
     int portNumber;
@@ -174,9 +197,28 @@ int main(int argc, char * argv[]){
         close(SocketClient);
     }
     sendMatrix(SocketClient);
+    Eigen::MatrixXd U;
+    Eigen::VectorXd Sigma;
+    Eigen::MatrixXd VT;
+    readBuffer.resize(1);
+    read(SocketClient,readBuffer.data(),readBuffer.size());
+    if(readBuffer=="K"){
+        U=getMatrix(SocketClient,readBuffer);
+        cout<<"U"<<endl;
+        cout<<U<<endl;
+    }
+    read(SocketClient,readBuffer.data(),readBuffer.size());
+    if(readBuffer=="L"){
+        Sigma= getVectorXD(SocketClient,readBuffer);
+        cout<<"Sigma:"<<endl;
+        cout<<Sigma<<endl;
+    }
+    read(SocketClient,readBuffer.data(),readBuffer.size());
+    if(readBuffer=="M"){
+        VT=getMatrix(SocketClient,readBuffer);
+        cout<<"VT"<<endl;
+        cout<<VT<<endl;
+    }
 
-    while (1){
-        sleep(10);
-    };
     return 0;
 }

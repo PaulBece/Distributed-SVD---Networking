@@ -140,6 +140,8 @@ int main(int argc, char * argv[]){
     write(SocketClient,&R0_rows,sizeof(int));
     write(SocketClient,&R0_cols,sizeof(int));
     write(SocketClient,R0.data(),R0.size()*sizeof(double));
+    Eigen::MatrixXd Q_thin = qr_local.householderQ() * Eigen::MatrixXd::Identity(Y_local.rows(), validRows);
+
 
     readBuffer.resize(1);
     read(SocketClient,readBuffer.data(),readBuffer.size());
@@ -156,10 +158,19 @@ int main(int argc, char * argv[]){
         read(SocketClient,U_part.data(),U_part.size()*sizeof(double));
         cout<< "U_part: "<<endl;
         cout<<U_part<<endl;
-        //Eigen::MatrixXd U_resultante = qr_local * U_part;
+        Eigen::MatrixXd U_resultante = Q_thin * U_part;
+        cout<< "U_Resultante: "<<endl;
+        cout << U_resultante<< endl;
 
+        int U_rows=U_resultante.rows();
+        int U_cols=U_resultante.cols();
+        writeBuffer="u";
+        write(SocketClient,writeBuffer.data(),writeBuffer.size());
+        write(SocketClient,&U_rows,sizeof(int));
+        write(SocketClient,&U_cols,sizeof(int));
+        write(SocketClient,U_resultante.data(),U_resultante.size()*sizeof(double));
     }
-
+    
     writeBuffer= "q";
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
     shutdown(SocketClient, SHUT_RDWR);
