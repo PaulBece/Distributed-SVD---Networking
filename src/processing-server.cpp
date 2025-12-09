@@ -118,8 +118,15 @@ int main(int argc, char * argv[]){
         cout<<A_R<<endl;
     }
     Eigen::MatrixXd Omega;
-    generateOmega_identical(rows, P + K, seed, Omega);
+    generateOmega_identical(cols, min(P + K, cols), seed, Omega);
+    cout<<"Omega:"<<endl;
     cout<<Omega<<endl;
+
+    Eigen::MatrixXd Y_R= A_R * Omega;
+    cout<<"Y_R:"<<endl;
+    cout<<Y_R<<endl;
+
+
 
     writeBuffer= "q";
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
