@@ -22,7 +22,7 @@
 #include <csignal>
 #include <random>
 #include <mutex>
-#include <cerrno> // Necesario para errno
+#include <cerrno> 
 #include <cstring>
 
 #define PORT 8080
@@ -66,6 +66,7 @@ bool readN2(int Socket, void * data, int size){
     
     while(bytes_left > 0){
         ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
+        usleep(1000); // Esperar 1ms
 
         if (bytes_read < 0) {
             // CHEQUEO DE ERRORES RECUPERABLES
