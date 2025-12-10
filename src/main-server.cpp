@@ -56,6 +56,7 @@ int n_R =0;
 mutex Mutex;
 mutex Mutex2;
 mutex Mutex3;
+mutex mapMutex;
 
 Eigen::MatrixXd U_distributed;
 Eigen::VectorXd Sigma;
@@ -257,30 +258,45 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
 }
 
 void assingWork(){
-    int nProcessors=connectedProcessors.size();
-    int nProcessor=0;
-    for (auto processor:connectedProcessors){
+    // 1. CREAR SNAPSHOT (COPIA SEGURA)
+    vector<ThreadData*> workersSnapshot;
+    
+    mapMutex.lock(); // Cerramos el mapa
+    for (auto& kv : connectedProcessors){
+        workersSnapshot.push_back(kv.second);
+    }
+    int currentTotalProcessors = connectedProcessors.size();
+    mapMutex.unlock(); // Abrimos el mapa inmediatamente. ¡El bloqueo dura microsegundos!
 
-        processor.second->writeBuffer="E";
+    // 2. TRABAJAR CON LA COPIA (Sin miedo a Segfaults)
+    int nProcessor = 0;
+    
+    // Iteramos sobre el VECTOR, no sobre el mapa
+    for (ThreadData* worker : workersSnapshot){ 
+        
+        // Verificamos si el socket sigue vivo (opcional pero recomendado)
+        // Nota: Si un worker se desconecta AHORA, fallará el writeN, pero NO crasheará el server (si ignoras SIGPIPE)
+        
+        worker->writeBuffer = "E";
+        
         string value;
         value.resize(sizeof(int));
-        for (int i=0;i<sizeof(int);i++){
-            value[i]=*(((char*)&nProcessor)+i);
-        }
-        processor.second->writeBuffer=processor.second->writeBuffer+value;
-        for (int i=0;i<sizeof(int);i++){
-            value[i]=*(((char*)&nProcessors)+i);
-        }
-        
-        processor.second->writeBuffer=processor.second->writeBuffer+value;
-        processor.second->log_buffer=processor.second->writeBuffer;
-        //cout<< processor.second->writeBuffer<<endl;
+        memcpy(value.data(), &nProcessor, sizeof(int));
+        worker->writeBuffer += value;
 
-        cout<<"nProcessor and nProcessors: " <<nProcessor << " "<< nProcessors<< endl;
-        cout<<"Sent:" <<processor.second->log_buffer<<endl;
-        writeN(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
-        sendChunkOfMatrix(*(processor.second),nProcessor);
-        processor.second->numProcessor=nProcessor;
+        value.resize(sizeof(int));
+        memcpy(value.data(), &currentTotalProcessors, sizeof(int));
+        worker->writeBuffer += value;
+
+        worker->log_buffer = worker->writeBuffer;
+        
+        cout << "Sending to processor " << nProcessor << endl;
+        
+        // Enviar datos (esto es lo que toma tiempo)
+        writeN(worker->SocketClient, worker->writeBuffer.data(), worker->writeBuffer.size());
+        sendChunkOfMatrix(*worker, nProcessor);
+        
+        worker->numProcessor = nProcessor;
         nProcessor++;
     }
 }
@@ -412,8 +428,10 @@ void readSocket(int SocketClient){
         {
         case 's':
             cout<<"Received:" <<thread.log_buffer<<endl;
-            connectedProcessors.insert(pair<int,ThreadData*>(SocketClient,&thread));
-            break;
+        mapMutex.lock(); // <--- BLOQUEO
+        connectedProcessors.insert(pair<int,ThreadData*>(SocketClient,&thread));
+        mapMutex.unlock(); // <--- DESBLOQUEO
+        break;
         
         case 'c':
             {
@@ -451,15 +469,13 @@ void readSocket(int SocketClient){
             break;
 
         case 'q':
-            cout<<"Received:" <<thread.log_buffer<<endl;
-            if (connectedClient==SocketClient){
-                connectedClient=0;
-            }
-            else if (connectedProcessors.find(SocketClient)!=connectedProcessors.end()){
-                connectedProcessors.erase(SocketClient);
-            }
-            flag1=false;
-            break;
+            mapMutex.lock(); // <--- BLOQUEO
+        if (connectedProcessors.find(SocketClient)!=connectedProcessors.end()){
+            connectedProcessors.erase(SocketClient);
+        }
+        mapMutex.unlock(); // <--- DESBLOQUEO
+        flag1=false;
+        break;
         case 'f': 
             {
             int rows = GetSize(thread);
