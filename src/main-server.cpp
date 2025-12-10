@@ -376,7 +376,7 @@ void readSocket(int SocketClient){
 
     while (flag1){
         thread.readBuffer.resize(1);
-        readN2(SocketClient,thread.readBuffer.data(),1);
+        flag1=readN2(SocketClient,thread.readBuffer.data(),1);
         thread.log_buffer=thread.readBuffer;
 
         switch (thread.readBuffer[0])
