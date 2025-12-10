@@ -74,6 +74,7 @@ void writeN(int Socket, void * data, int size){
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                cout<<"Me meto CHIZZ en writeN"<<endl;
                 usleep(1000); // Esperar 1ms
                 continue;
             }
@@ -101,6 +102,7 @@ bool readN2(int Socket, void * data, int size){
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                cout<<"Me meto CHIZZ en readN2"<<endl;
                 usleep(1000); // Esperar 1ms
                 continue;
             }
@@ -120,6 +122,7 @@ bool readN2(int Socket, void * data, int size){
     }
     return true;
 }
+
 void signalHandler(int signum) {
     cout << "\nInterrupcion detectada (Ctrl+C). Apagando servidor..." << endl;
     

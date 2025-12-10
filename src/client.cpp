@@ -42,6 +42,7 @@ void writeN(int Socket, void * data, int size){
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                cout<<"Me meto CHIZZ en writeN"<<endl;
                 usleep(1000); // Esperar 1ms
                 continue;
             }
@@ -52,6 +53,42 @@ void writeN(int Socket, void * data, int size){
             //usleep(1);
         }
     }
+}
+
+bool readN2(int Socket, void * data, int size){
+    int bytes_left = size;
+    int offset = 0;
+    
+    while(bytes_left > 0){
+        ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
+
+        if (bytes_read < 0) {
+            // CHEQUEO DE ERRORES RECUPERABLES
+            if (errno == EINTR) {
+                // Fue una interrupción del sistema (señal), intentamos de nuevo inmediatamente
+                continue; 
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                cout<<"Me meto CHIZZ en readN2"<<endl;
+                usleep(1000); // Esperar 1ms
+                continue;
+            }
+            
+            // Error fatal real
+            cerr << "Error fatal en socket: " << strerror(errno) << endl;
+            return false; 
+        }
+        else if (bytes_read == 0) {
+            // Desconexión (EOF)
+            cerr << "El otro extremo cerro la conexion." << endl;
+            return false;
+        }
+
+        bytes_left -= bytes_read;
+        offset += bytes_read;
+    }
+    return true;
 }
 
 
@@ -74,41 +111,6 @@ void signalHandler(int signum) {
 }
 
 
-bool readN2(int Socket, void * data, int size){
-    int bytes_left = size;
-    int offset = 0;
-    
-    while(bytes_left > 0){
-        ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
-        
-
-        if (bytes_read < 0) {
-            // CHEQUEO DE ERRORES RECUPERABLES
-            if (errno == EINTR) {
-                // Fue una interrupción del sistema (señal), intentamos de nuevo inmediatamente
-                continue; 
-            }
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
-                usleep(1000); // Esperar 1ms
-                continue;
-            }
-            
-            // Error fatal real
-            cerr << "Error fatal en socket: " << strerror(errno) << endl;
-            return false; 
-        }
-        else if (bytes_read == 0) {
-            // Desconexión (EOF)
-            cerr << "El otro extremo cerro la conexion." << endl;
-            return false;
-        }
-
-        bytes_left -= bytes_read;
-        offset += bytes_read;
-    }
-    return true;
-}
 
 Eigen::MatrixXd readCSV(const std::string &path) {
     std::ifstream indata;

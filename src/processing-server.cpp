@@ -41,6 +41,7 @@ void writeN(int Socket, void * data, int size){
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                cout<<"Me meto CHIZZ en writeN"<<endl;
                 usleep(1000); // Esperar 1ms
                 continue;
             }
@@ -59,7 +60,6 @@ bool readN2(int Socket, void * data, int size){
     
     while(bytes_left > 0){
         ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
-        
 
         if (bytes_read < 0) {
             // CHEQUEO DE ERRORES RECUPERABLES
@@ -69,6 +69,7 @@ bool readN2(int Socket, void * data, int size){
             }
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                cout<<"Me meto CHIZZ en readN2"<<endl;
                 usleep(1000); // Esperar 1ms
                 continue;
             }
