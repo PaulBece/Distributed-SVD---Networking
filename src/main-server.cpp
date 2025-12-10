@@ -81,7 +81,7 @@ void writeN(int Socket, void * data, int size){
         else{
             offset+=bytes_written;
             bytes_left-=bytes_written;
-            usleep(1000);
+            //usleep(1);
         }
     }
 }
