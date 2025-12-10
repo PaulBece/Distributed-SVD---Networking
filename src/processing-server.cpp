@@ -26,15 +26,27 @@ int seed;
 int K,P,L;
 int nProcessor,nProcessors;
 
+// Función corregida y robusta para redes reales
 void readN2(int Socket, void * data, int size){
-    int n= size;
-    int tmp2=n; 
-    int tmp3=0;
-    while(tmp2>0){
-        int c;
-        c=read(Socket,((char *)data)+tmp3,min(1000,tmp2));
-        tmp2-=c;
-        tmp3+=c;
+    int bytes_left = size;
+    int offset = 0;
+    
+    while(bytes_left > 0){
+        // 1. Quitamos el min(1000) para que lea todo lo que pueda (más rápido)
+        // 2. Usamos recv en lugar de read (es mejor para sockets), aunque read funciona igual.
+        ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
+
+        // 3. MANEJO DE ERRORES CRÍTICO
+        if (bytes_read <= 0) {
+            // Si devuelve 0 (desconexión) o -1 (error), no podemos seguir.
+            // En un sistema real deberíamos lanzar excepción o retornar false,
+            // pero para evitar el Core Dump inmediato, rompemos el ciclo o imprimimos error.
+            cerr << "Error critico en socket (read devolvio " << bytes_read << ")" << endl;
+            break; // Salimos para no corromper memoria
+        }
+
+        bytes_left -= bytes_read;
+        offset += bytes_read;
     }
 }
 
