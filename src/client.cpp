@@ -29,6 +29,15 @@ using namespace std;
 Eigen::MatrixXd  owo;
 int globalSocketClient = -1; 
 
+void logPacket(string dir, string flag, string payloadDesc = "") {
+    cout << (dir == "TX" ? ">> TX" : "<< RX") 
+         << " [" << flag << "]";
+    if (!payloadDesc.empty()) {
+        cout << ": " << payloadDesc;
+    }
+    cout << endl;
+}
+
 void ensureFolderExists(const std::string& folderName) {
     struct stat st = {0};
     if (stat(folderName.c_str(), &st) == -1) {
@@ -158,6 +167,9 @@ void sendMatrix(int SocketClient) {
     owo = readCSV(filepath);
     int rows = owo.rows();
     int cols = owo.cols();
+
+    logPacket("TX", "f", "[Rows: " + to_string(rows) + "] + [Cols: " + to_string(cols) + "] + [Data] + [K: " + to_string(K) + "] + [P: " + to_string(P) + "]");
+
     string header = "f";
     write(SocketClient, header.data(), header.size());
     write(SocketClient, &rows, sizeof(int));
@@ -167,26 +179,28 @@ void sendMatrix(int SocketClient) {
     write(SocketClient,&P,sizeof(int));
 }
 
-Eigen::MatrixXd getMatrix(int SocketClient, string &readBuffer){
+Eigen::MatrixXd getMatrix(int SocketClient, string &readBuffer, string flag){
     int rows,cols;
     readN2(SocketClient,&rows,sizeof(int));
     readN2(SocketClient,&cols,sizeof(int));
-    cout<<readBuffer<< " "<< rows<< " "<< cols<<endl;
+    //cout<<readBuffer<< " "<< rows<< " "<< cols<<endl;
+    
+    logPacket("RX", flag, "[Rows: " + to_string(rows) + "] + [Cols: " + to_string(cols) + "] + [Data]");
+    
     Eigen::MatrixXd matrix (rows,cols);
-
     readN2(SocketClient,matrix.data(),matrix.size()*sizeof(double));
-
     return matrix;
 }
 
 Eigen::VectorXd getVectorXD(int SocketClient,string &readBuffer){
     int size;
     readN2(SocketClient,&size,sizeof(int));
-    cout<<readBuffer<< " "<< size<<endl;
+
+    logPacket("RX", "L", "[Size: " + to_string(size) + "] + [Data]");
+
+    //cout<<readBuffer<< " "<< size<<endl;
     Eigen::VectorXd Vector (size);
-
     readN2(SocketClient,Vector.data(),Vector.size()*sizeof(double));
-
     return Vector;
 }
 
@@ -263,19 +277,22 @@ int main(int argc, char * argv[]){
     string readBuffer;
     readBuffer.resize(1);
 
+    logPacket("TX", "c", "[Solicitud Conexion]");
     write(SocketClient,writeBuffer.data(),writeBuffer.size());
 
     readN2(SocketClient,readBuffer.data(),1);
 
     if (readBuffer=="C"){
-        cout << "Successfull Connection" << endl;
+        logPacket("RX", "C", "[Conexion Aceptada]");
     }
     else if (readBuffer=="X"){
         int size = GetSize(SocketClient, readBuffer);
         readBuffer.resize(size);
         readN2(SocketClient,readBuffer.data(),size);
-        cout<<readBuffer<<endl;
+        logPacket("RX", "X", "[Error: " + readBuffer + "]");
+
         writeBuffer="q";
+        logPacket("TX", "q");
         write(SocketClient,writeBuffer.data(),writeBuffer.size());
         close(SocketClient);
     }
@@ -286,21 +303,21 @@ int main(int argc, char * argv[]){
     readBuffer.resize(1);
     readN2(SocketClient,readBuffer.data(),readBuffer.size());
     if(readBuffer=="K"){
-        U=getMatrix(SocketClient,readBuffer);
-        cout<<"U"<<endl;
-        cout<<U<<endl;
+        U=getMatrix(SocketClient,readBuffer, "K");
+        //cout<<"U"<<endl;
+        //cout<<U<<endl;
     }
     readN2(SocketClient,readBuffer.data(),readBuffer.size());
     if(readBuffer=="L"){
         Sigma= getVectorXD(SocketClient,readBuffer);
-        cout<<"Sigma:"<<endl;
-        cout<<Sigma<<endl;
+        //cout<<"Sigma:"<<endl;
+        //cout<<Sigma<<endl;
     }
     readN2(SocketClient,readBuffer.data(),readBuffer.size());
     if(readBuffer=="M"){
-        VT=getMatrix(SocketClient,readBuffer);
-        cout<<"VT"<<endl;
-        cout<<VT<<endl;
+        VT=getMatrix(SocketClient,readBuffer, "M");
+        //cout<<"VT"<<endl;
+        //cout<<VT<<endl;
     }
 
     calculateAndPrintPrecision(owo, U, Sigma,VT);

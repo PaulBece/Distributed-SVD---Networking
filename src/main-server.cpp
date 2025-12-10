@@ -27,6 +27,15 @@
 
 using namespace std;
 
+void logPacket(string dir, string flag, string payloadDesc = "") {
+    cout << (dir == "TX" ? ">> TX" : "<< RX") 
+         << " [" << flag << "]";
+    if (!payloadDesc.empty()) {
+        cout << ": " << payloadDesc;
+    }
+    cout << endl;
+}
+
 struct ThreadData{
     string writeBuffer;
     string readBuffer;
@@ -138,9 +147,10 @@ void sendSeedKP(ThreadData &thread){
     }
     thread.writeBuffer+=value;
 
+    logPacket("TX", "G", "[Seed: " + to_string(seed) + "] + [K: " + to_string(K) + "] + [P: " + to_string(P) + "]");
     write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
     thread.log_buffer=thread.writeBuffer;
-    cout<<"Sent: "<<thread.log_buffer<<endl;
+    //cout<<"Sent: "<<thread.log_buffer<<endl;
 }
 
 void sendSeedToProcessors(){
@@ -150,13 +160,15 @@ void sendSeedToProcessors(){
 }
 
 void sendChunkOfMatrix(ThreadData thread,int nProcessor){
-    cout<< "sendChunkOfMatrix"<<endl;
+    //cout<< "sendChunkOfMatrix"<<endl;
     int nProcessors=connectedProcessors.size();
     int nRowsPerProcessor=receivedMat.rows()/nProcessors;
     int lastProcessor=receivedMat.rows()%nProcessors+nRowsPerProcessor;
     int startRow;
     startRow=nRowsPerProcessor*nProcessor;
     int nCols=receivedMat.cols();
+
+    int rowsToSend = (nProcessor==nProcessors-1) ? lastProcessor : nRowsPerProcessor;
 
     if (nProcessor==nProcessors-1){
         thread.writeBuffer="T";
@@ -172,7 +184,7 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
         }
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
-        cout<<thread.log_buffer;
+        //cout<<thread.log_buffer;
         write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,lastProcessor,nCols);
@@ -193,13 +205,14 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
         }
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
-        cout<<thread.log_buffer;
+        //cout<<thread.log_buffer;
         write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         //cout<<aux<<endl;
     }
+    logPacket("TX", "T", "[Rows: " + to_string(rowsToSend) + "] + [Cols: " + to_string(nCols) + "] + [Chunk Data]");
 }
 
 void assingWork(){
@@ -222,8 +235,10 @@ void assingWork(){
         processor.second->log_buffer=processor.second->writeBuffer;
         //cout<< processor.second->writeBuffer<<endl;
 
-        cout<<"nProcessor and nProcessors: " <<nProcessor << " "<< nProcessors<< endl;
-        cout<<"Sent:" <<processor.second->log_buffer<<endl;
+        //cout<<"nProcessor and nProcessors: " <<nProcessor << " "<< nProcessors<< endl;
+        //cout<<"Sent:" <<processor.second->log_buffer<<endl;
+        logPacket("TX", "E", "[ID: " + to_string(nProcessor) + "] + [Total: " + to_string(nProcessors) + "]");
+        
         write(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
         sendChunkOfMatrix(*(processor.second),nProcessor);
         processor.second->numProcessor=nProcessor;
@@ -255,13 +270,14 @@ void stackMatrixR(bool U=false){
     }
 
     if(U){
-        cout<<"U: "<<R_stack<<endl;
+        //cout<<"U: "<<R_stack<<endl;
     }
     else{
-        cout<<"R_stack: "<<R_stack<<endl;
+        //cout<<"R_stack: "<<R_stack<<endl;
     }  
 
     vecMatrix.clear();
+    cout << "(Sistema) Matrices " << (U ? "U" : "R") << " apiladas." << endl;
 }
 
 void sendU(ThreadData &thread){
@@ -271,6 +287,8 @@ void sendU(ThreadData &thread){
     int startRow;
     startRow=nRowsPerProcessor*thread.numProcessor;
     int nCols=U_distributed.cols();
+
+    int rowsToSend = (thread.numProcessor==nProcessors-1) ? lastProcessor : nRowsPerProcessor;
 
     if (thread.numProcessor==nProcessors-1){
         string value;
@@ -285,12 +303,13 @@ void sendU(ThreadData &thread){
         }
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
-        cout<<thread.log_buffer;
+        //cout<<thread.log_buffer;
+        
         write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=U_distributed.block(startRow,0,lastProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<"Sent: "<<aux<<endl;
+        //cout<<"Sent: "<<aux<<endl;
     }
     else{
         string value;
@@ -305,13 +324,15 @@ void sendU(ThreadData &thread){
         }
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
-        cout<<thread.log_buffer;
+        //cout<<thread.log_buffer;
         write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=U_distributed.block(startRow,0,nRowsPerProcessor,nCols);
         write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
-        cout<<"Sent: "<<aux<<endl;
+        //cout<<"Sent: "<<aux<<endl;
     }
+    logPacket("TX", "U", "[Rows: " + to_string(rowsToSend) + "] + [Cols: " + to_string(nCols) + "] + [Data]");
+        
 }
 
 void assingWorkU(){
@@ -322,11 +343,13 @@ void assingWorkU(){
 }
 
 void SVD(){
+    cout << "(Sistema) Ejecutando SVD del nucleo..." << endl;
+
     Eigen::BDCSVD<Eigen::MatrixXd> svd(R_stack, Eigen::ComputeThinU | Eigen::ComputeThinV);
 
     U_distributed = svd.matrixU();
     Sigma = svd.singularValues();
-    cout<<"Owo"<<endl;
+    //cout<<"Owo"<<endl;
     assingWorkU();
 }
 void sendMatrixToClient(Eigen::MatrixXd &matrix){
@@ -357,18 +380,23 @@ void readSocket(int SocketClient){
         switch (thread.readBuffer[0])
         {
         case 's':
-            cout<<"Received:" <<thread.log_buffer<<endl;
+            //cout<<"Received:" <<thread.log_buffer<<endl;
+            logPacket("RX", "s", "[Worker Registrado] ID_Socket: " + to_string(SocketClient));
             connectedProcessors.insert(pair<int,ThreadData*>(SocketClient,&thread));
             break;
         
         case 'c':
             {
-                cout<<"Received:" <<thread.log_buffer<<endl;
+                //cout<<"Received:" <<thread.log_buffer<<endl;
                 if (connectedClient==0){
                     connectedClient=SocketClient;
                     thread.writeBuffer="C";
                     thread.log_buffer=thread.writeBuffer;
-                    cout<<"Sent:" <<thread.log_buffer<<endl;
+                    //cout<<"Sent:" <<thread.log_buffer<<endl;
+
+                    logPacket("RX", "c", "[Solicitud Cliente]");
+                    logPacket("TX", "C", "[Aceptado]");
+
                     write(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 }
                 else {
@@ -390,19 +418,22 @@ void readSocket(int SocketClient){
 
                     thread.writeBuffer="X"+str2+str1;
                     thread.log_buffer=thread.writeBuffer;
-                    cout<<"Sent:" <<thread.log_buffer<<endl;
+                    //cout<<"Sent:" <<thread.log_buffer<<endl;
+                    logPacket("TX", "X", "[Rechazado - Ocupado]");
                     write(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 }
             }
             break;
 
         case 'q':
-            cout<<"Received:" <<thread.log_buffer<<endl;
+            //cout<<"Received:" <<thread.log_buffer<<endl;
             if (connectedClient==SocketClient){
                 connectedClient=0;
+                logPacket("RX", "q", "[Cliente Desconectado]");
             }
             else if (connectedProcessors.find(SocketClient)!=connectedProcessors.end()){
                 connectedProcessors.erase(SocketClient);
+                logPacket("RX", "q", "[Worker Desconectado]");
             }
             flag1=false;
             break;
@@ -410,18 +441,20 @@ void readSocket(int SocketClient){
             {
             int rows = GetSize(thread);
             int cols = GetSize(thread);
-            cout<<"Received:" <<thread.log_buffer<<endl;
+            //cout<<"Received:" <<thread.log_buffer<<endl;
             int datasize = rows * cols * sizeof(double);
             receivedMat=Eigen::MatrixXd (rows, cols);
             readN2(SocketClient, receivedMat.data(), datasize);
             readN2(SocketClient,&K,sizeof(int));
             readN2(SocketClient,&P,sizeof(int));
-            cout << "Matriz Recibida:" << endl;
+
+            logPacket("RX", "f", "[Rows: " + to_string(rows) + "] + [Cols: " + to_string(cols) + "] + [Data] + [K: " + to_string(K) + "] + [P: " + to_string(P) + "]");
+            //cout << "Matriz Recibida:" << endl;
             //cout << receivedMat << endl;
-            cout<<endl;
-            cout<<"K and P: "<<K<<" "<<P<<endl;
+            //cout<<endl;
+            //cout<<"K and P: "<<K<<" "<<P<<endl;
             genSeed();
-            cout<<"Seed: "<<seed<<endl;
+            //cout<<"Seed: "<<seed<<endl;
             sendSeedToProcessors();
             assingWork();
             vecMatrix.resize(connectedProcessors.size());
@@ -432,6 +465,9 @@ void readSocket(int SocketClient){
             int rows,cols;
             readN2(SocketClient,&rows,sizeof(int));
             readN2(SocketClient,&cols,sizeof(int));
+
+            logPacket("RX", "o", "[Rows: " + to_string(rows) + "] + [Cols: " + to_string(cols) + "] + [R Matrix] from Worker " + to_string(thread.numProcessor));
+            
             Eigen::MatrixXd R_k ( rows , cols);
             readN2 (SocketClient, R_k.data(), rows*cols*sizeof(double));
             Mutex.lock();
@@ -447,27 +483,30 @@ void readSocket(int SocketClient){
             break;
         }
         case 'a':{
-            cout<<"Case a:"<<endl;
-            cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            //cout<<"Case a:"<<endl;
+            //cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             int rows,cols;
             readN2(SocketClient,&rows,sizeof(int));
             readN2(SocketClient,&cols,sizeof(int));
+            
+            logPacket("RX", "a", "[Rows: " + to_string(rows) + "] + [Cols: " + to_string(cols) + "] + [UTA Data] from Worker " + to_string(thread.numProcessor));
+
             Eigen::MatrixXd UTA_k ( rows , cols);
             readN2 (SocketClient, UTA_k.data(), rows*cols*sizeof(double));
             Mutex.lock();
             if (vecMatrix.size()==0){
-                cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
-                cout<<"RESIZE\n";
+                //cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
+                //cout<<"RESIZE\n";
                 vecMatrix.resize(connectedProcessors.size());
-                cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
-                cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
+                //cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
+                //cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
             }
             n_R++;
             vecMatrix[thread.numProcessor]=UTA_k;
             if (n_R==connectedProcessors.size()){
                 Mutex2.unlock();
             }
-            cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            //cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             Mutex.unlock();
             if(thread.numProcessor+1==connectedProcessors.size()){
                 Mutex2.lock();
@@ -478,8 +517,8 @@ void readSocket(int SocketClient){
                 }
                 Eigen::MatrixXd Sigma_Inverse = Sigma.asDiagonal().inverse();
                 VT = Sigma_Inverse * VT; //Ojito FE
-                cout<<"VT: "<<endl;
-                cout<<VT<<endl;
+                //cout<<"VT: "<<endl;
+                //cout<<VT<<endl;
                 n_R=0;
                 vecMatrix.clear();
                 Mutex3.unlock();
@@ -490,24 +529,27 @@ void readSocket(int SocketClient){
         }
         case 'u':
         {
-            cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            //cout<<"n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             int rows,cols;
             readN2(SocketClient,&rows,sizeof(int));
             readN2(SocketClient,&cols,sizeof(int));
+
+            logPacket("RX", "u", "[Rows: " + to_string(rows) + "] + [Cols: " + to_string(cols) + "] + [U Local] from Worker " + to_string(thread.numProcessor));
+
             Eigen::MatrixXd U_k ( rows , cols);
             readN2 (SocketClient, U_k.data(), rows*cols*sizeof(double));
 
             Mutex.lock();
             if (vecMatrix.size()==0){
-                cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
-                cout<<"RESIZE\n";
+                //cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
+                //cout<<"RESIZE\n";
                 vecMatrix.resize(connectedProcessors.size());
-                cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
-                cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
+                //cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
+                //cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
             }
             vecMatrix[thread.numProcessor]=U_k;
             n_R++;
-            cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            //cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
             Mutex.unlock();
 
             if (n_R==connectedProcessors.size()){
@@ -516,19 +558,22 @@ void readSocket(int SocketClient){
 
             if(thread.numProcessor+1==connectedProcessors.size()){
                 Mutex2.lock();
-                cout<<"inside if n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+                //cout<<"inside if n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
                 stackMatrixR(true);
                 thread.writeBuffer="K";
+                logPacket("TX", "K", "[Rows: " + to_string(R_stack.rows()) + "] + [Cols: " + to_string(R_stack.cols()) + "] + [U Data]");
                 write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
-                cout<<"sent K\n";
+                //cout<<"sent K\n";
                 sendMatrixToClient(R_stack);
                 thread.writeBuffer="L";
+                logPacket("TX", "L", "[Size: " + to_string(Sigma.size()) + "] + [Sigma Data]");
                 write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
-                cout<<"sent L\n";
+                //cout<<"sent L\n";
                 sendVectorXDToClient(Sigma);
                 thread.writeBuffer="M";
                 write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
-                cout<<"sent M\n";
+                logPacket("TX", "M", "[Rows: " + to_string(VT.rows()) + "] + [Cols: " + to_string(VT.cols()) + "] + [VT Data]");
+                //cout<<"sent M\n";
                 sendMatrixToClient(VT);
             }
             break;
@@ -569,7 +614,7 @@ int main(int argc, char * argv[]){
     Mutex2.lock();
     Mutex3.lock();
     vector<thread> threads;
-
+    cout << "=== SERVER INICIADO EN PUERTO " << portNumber << " ===" << endl;
     while (1){
         int SocketClient = accept(SocketServer, NULL, NULL);
         threads.push_back(thread (readSocket,SocketClient));
