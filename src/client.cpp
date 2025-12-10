@@ -18,30 +18,73 @@
 #include <iterator>
 #include <Eigen/Dense>
 #include <csignal>
+#include <fstream> 
+#include <iomanip>  
+#include <sys/stat.h> 
+#include <sys/types.h>
 
 #define PORT 8080
 
 using namespace std;
 Eigen::MatrixXd  owo;
-// <--- 2. Variable Global para poder accederla desde el signal handler
 int globalSocketClient = -1; 
 
-// <--- 3. Función que maneja el Ctrl + C
+void ensureFolderExists(const std::string& folderName) {
+    struct stat st = {0};
+    if (stat(folderName.c_str(), &st) == -1) {
+        if (mkdir(folderName.c_str(), 0777) == 0) {
+            std::cout << "Carpeta '" << folderName << "' creada exitosamente." << std::endl;
+        } else {
+            std::cerr << "Error: No se pudo crear la carpeta '" << folderName << "'" << std::endl;
+        }
+    }
+}
+
+void writeToCSV(const std::string& filename, const Eigen::MatrixXd& matrix) {
+    std::ofstream file(filename);
+    
+    if (!file.is_open()) {
+        std::cerr << "Error: No se pudo crear el archivo " << filename << std::endl;
+        return;
+    }
+
+    file << std::scientific << std::setprecision(15);
+
+    for (int i = 0; i < matrix.rows(); ++i) {
+        for (int j = 0; j < matrix.cols(); ++j) {
+            file << matrix(i, j);
+            if (j < matrix.cols() - 1) file << ",";
+        }
+        file << "\n";
+    }
+    file.close();
+    std::cout << "Guardado: " << filename << std::endl;
+}
+
+void saveSVDResults(const Eigen::MatrixXd& U, 
+                    const Eigen::VectorXd& Sigma, 
+                    const Eigen::MatrixXd& VT) {
+    
+    std::string folder = "output";
+    std::cout << "\n--- GUARDANDO RESULTADOS EN '" << folder << "/' ---" << std::endl;
+    ensureFolderExists(folder);
+    writeToCSV(folder + "/U.csv", U);
+    writeToCSV(folder + "/Sigma.csv", Sigma);
+    writeToCSV(folder + "/VT.csv", VT);
+    std::cout << "-------------------------------------" << std::endl;
+}
+
 void signalHandler(int signum) {
     cout << "\nInterrupcion detectada (Ctrl+C). Cerrando cliente..." << endl;
     
     if (globalSocketClient != -1) {
-        // Intentar avisar al servidor que nos vamos
         string msg = "q";
         write(globalSocketClient, msg.data(), msg.size());
-        
-        // Cerrar el socket
         shutdown(globalSocketClient, SHUT_RDWR);
         close(globalSocketClient);
         cout << "Socket cerrado correctamente." << endl;
     }
-    
-    exit(signum); // Terminar el programa
+    exit(signum); 
 }
 
 void readN2(int Socket, void * data, int size){
@@ -62,7 +105,6 @@ Eigen::MatrixXd readCSV(const std::string &path) {
     
     if (!indata.is_open()) {
         std::cerr << "Error: No se pudo abrir el archivo " << path << std::endl;
-        // Devuelve una matriz vacía o maneja el error según prefieras
         return Eigen::MatrixXd(0, 0); 
     }
 
@@ -74,19 +116,13 @@ Eigen::MatrixXd readCSV(const std::string &path) {
         std::stringstream lineStream(line);
         std::string cell;
         while (std::getline(lineStream, cell, ',')) {
-            // Convertir string a double y guardar
             values.push_back(std::stod(cell));
         }
         rows++;
     }
-    
-    // Calcular columnas basándonos en el total de elementos y filas
+
     if (rows == 0) return Eigen::MatrixXd(0,0);
     int cols = values.size() / rows;
-
-    // Mapear el vector plano a una Matriz Eigen.
-    // Importante: Usamos RowMajor porque C++ lee línea por línea (fila por fila),
-    // pero Eigen por defecto es ColumnMajor.
     return Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(values.data(), rows, cols);
 }
 
@@ -161,25 +197,18 @@ void calculateAndPrintPrecision(const Eigen::MatrixXd &A,
     
     cout << "\n--- CALCULANDO PRECISION DEL SVD ---" << endl;
 
-    // 1. Reconstruir la matriz aproximada: A' = U * Sigma * VT
-    // Sigma es un vector, usamos .asDiagonal() para hacerlo matriz cuadrada
     Eigen::MatrixXd A_approx = U * Sigma.asDiagonal() * VT;
 
-    // 2. Calcular la matriz de diferencia (Residuos)
     Eigen::MatrixXd Diff = A - A_approx;
 
-    // 3. Calcular la Norma de Frobenius (La magnitud del error)
-    // Eigen .norm() calcula la norma de Frobenius por defecto
     double errorNorm = Diff.norm();
     double originalNorm = A.norm();
 
-    // 4. Calcular el Error Relativo (Más útil para entender el porcentaje)
     double relativeError = 0.0;
-    if (originalNorm > 1e-9) { // Evitar división por cero
+    if (originalNorm > 1e-9) { 
         relativeError = errorNorm / originalNorm;
     }
 
-    // 5. Mostrar resultados
     cout << "Dimensiones Originales: " << A.rows() << "x" << A.cols() << endl;
     cout << "Dimensiones Reconstruidas: " << A_approx.rows() << "x" << A_approx.cols() << endl;
     cout << "-----------------------------------" << endl;
@@ -188,7 +217,7 @@ void calculateAndPrintPrecision(const Eigen::MatrixXd &A,
     cout << "Error Relativo: " << (relativeError * 100.0) << " %" << endl;
     cout << "Precision (1 - Error): " << ((1.0 - relativeError) * 100.0) << " %" << endl;
     
-    // Opcional: Mostrar una pequeña comparativa visual
+
     if (A.rows() <= 10 && A.cols() <= 10) {
         cout << "\nComparativa Visual (Primeras filas):" << endl;
         cout << "ORIGINAL:\n" << A << endl;
@@ -275,6 +304,6 @@ int main(int argc, char * argv[]){
     }
 
     calculateAndPrintPrecision(owo, U, Sigma,VT);
-
+    saveSVDResults(U, Sigma, VT);
     return 0;
 }
