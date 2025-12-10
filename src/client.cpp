@@ -33,7 +33,7 @@ void writeN(int Socket, void * data, int size){
     int bytes_left=size;
     int offset=0;
     while (bytes_left>0){
-        ssize_t bytes_written = write (Socket,((char*)data)+offset,min(1000,bytes_left));
+        ssize_t bytes_written = write (Socket,((char*)data)+offset,bytes_left);
         if (bytes_written < 0) {
             // CHEQUEO DE ERRORES RECUPERABLES
             if (errno == EINTR) {
