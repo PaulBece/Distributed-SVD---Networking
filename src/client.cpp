@@ -28,6 +28,33 @@ Eigen::MatrixXd  owo;
 // <--- 2. Variable Global para poder accederla desde el signal handler
 int globalSocketClient = -1; 
 
+
+void writeN(int Socket, void * data, int size){
+    int bytes_left=size;
+    int offset=0;
+    while (bytes_left>0){
+        ssize_t bytes_written = write (Socket,((char*)data)+offset,min(1000,bytes_left));
+        if (bytes_written < 0) {
+            // CHEQUEO DE ERRORES RECUPERABLES
+            if (errno == EINTR) {
+                // Fue una interrupción del sistema (señal), intentamos de nuevo inmediatamente
+                continue; 
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                usleep(1000); // Esperar 1ms
+                continue;
+            }
+        }
+        else{
+            offset+=bytes_written;
+            bytes_left-=bytes_written;
+            usleep(1000);
+        }
+    }
+}
+
+
 // <--- 3. Función que maneja el Ctrl + C
 void signalHandler(int signum) {
     cout << "\nInterrupcion detectada (Ctrl+C). Cerrando cliente..." << endl;
@@ -35,7 +62,7 @@ void signalHandler(int signum) {
     if (globalSocketClient != -1) {
         // Intentar avisar al servidor que nos vamos
         string msg = "q";
-        write(globalSocketClient, msg.data(), msg.size());
+        writeN(globalSocketClient, msg.data(), msg.size());
         
         // Cerrar el socket
         shutdown(globalSocketClient, SHUT_RDWR);
@@ -46,13 +73,14 @@ void signalHandler(int signum) {
     exit(signum); // Terminar el programa
 }
 
+
 bool readN2(int Socket, void * data, int size){
     int bytes_left = size;
     int offset = 0;
     
     while(bytes_left > 0){
         ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
-        usleep(1000); // Esperar 1ms
+        
 
         if (bytes_read < 0) {
             // CHEQUEO DE ERRORES RECUPERABLES
@@ -149,12 +177,12 @@ void sendMatrix(int SocketClient) {
     int rows = owo.rows();
     int cols = owo.cols();
     string header = "f";
-    write(SocketClient, header.data(), header.size());
-    write(SocketClient, &rows, sizeof(int));
-    write(SocketClient, &cols, sizeof(int));
-    write(SocketClient, owo.data(), owo.size() * sizeof(double));
-    write(SocketClient,&K,sizeof(int));
-    write(SocketClient,&P,sizeof(int));
+    writeN(SocketClient, header.data(), header.size());
+    writeN(SocketClient, &rows, sizeof(int));
+    writeN(SocketClient, &cols, sizeof(int));
+    writeN(SocketClient, owo.data(), owo.size() * sizeof(double));
+    writeN(SocketClient,&K,sizeof(int));
+    writeN(SocketClient,&P,sizeof(int));
 }
 
 Eigen::MatrixXd getMatrix(int SocketClient, string &readBuffer){
@@ -260,7 +288,7 @@ int main(int argc, char * argv[]){
     string readBuffer;
     readBuffer.resize(1);
 
-    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+    writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
 
     readN2(SocketClient,readBuffer.data(),1);
 
@@ -273,7 +301,7 @@ int main(int argc, char * argv[]){
         readN2(SocketClient,readBuffer.data(),size);
         cout<<readBuffer<<endl;
         writeBuffer="q";
-        write(SocketClient,writeBuffer.data(),writeBuffer.size());
+        writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
         close(SocketClient);
     }
     sendMatrix(SocketClient);

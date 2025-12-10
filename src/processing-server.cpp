@@ -28,13 +28,38 @@ int seed;
 int K,P,L;
 int nProcessor,nProcessors;
 
+void writeN(int Socket, void * data, int size){
+    int bytes_left=size;
+    int offset=0;
+    while (bytes_left>0){
+        ssize_t bytes_written = write (Socket,((char*)data)+offset,min(1000,bytes_left));
+        if (bytes_written < 0) {
+            // CHEQUEO DE ERRORES RECUPERABLES
+            if (errno == EINTR) {
+                // Fue una interrupción del sistema (señal), intentamos de nuevo inmediatamente
+                continue; 
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                usleep(1000); // Esperar 1ms
+                continue;
+            }
+        }
+        else{
+            offset+=bytes_written;
+            bytes_left-=bytes_written;
+            usleep(1000);
+        }
+    }
+}
+
 bool readN2(int Socket, void * data, int size){
     int bytes_left = size;
     int offset = 0;
     
     while(bytes_left > 0){
         ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
-        usleep(1000); // Esperar 1ms
+        
 
         if (bytes_read < 0) {
             // CHEQUEO DE ERRORES RECUPERABLES
@@ -112,7 +137,7 @@ int main(int argc, char * argv[]){
     string writeBuffer="s";
     string readBuffer;
 
-    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+    writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
 
     cout<<"Processor Connected\n";
 
@@ -174,10 +199,10 @@ int main(int argc, char * argv[]){
     int R0_rows=R0.rows();
     int R0_cols=R0.cols();
     writeBuffer="o";
-    write(SocketClient,writeBuffer.data(),writeBuffer.size());
-    write(SocketClient,&R0_rows,sizeof(int));
-    write(SocketClient,&R0_cols,sizeof(int));
-    write(SocketClient,R0.data(),R0.size()*sizeof(double));
+    writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
+    writeN(SocketClient,&R0_rows,sizeof(int));
+    writeN(SocketClient,&R0_cols,sizeof(int));
+    writeN(SocketClient,R0.data(),R0.size()*sizeof(double));
     Eigen::MatrixXd Q_thin = qr_local.householderQ() * Eigen::MatrixXd::Identity(Y_local.rows(), validRows);
 
 
@@ -204,26 +229,26 @@ int main(int argc, char * argv[]){
         int UTA_rows=UTA.rows();
         int UTA_cols=UTA.cols();
         writeBuffer="a";
-        write(SocketClient,writeBuffer.data(),writeBuffer.size());
-        write(SocketClient,&UTA_rows,sizeof(int));
-        write(SocketClient,&UTA_cols,sizeof(int));
-        write(SocketClient,UTA.data(),UTA.size()*sizeof(double));
+        writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
+        writeN(SocketClient,&UTA_rows,sizeof(int));
+        writeN(SocketClient,&UTA_cols,sizeof(int));
+        writeN(SocketClient,UTA.data(),UTA.size()*sizeof(double));
 
 
         int U_rows=U_resultante.rows();
         int U_cols=U_resultante.cols();
         writeBuffer="u";
-        write(SocketClient,writeBuffer.data(),writeBuffer.size());
-        write(SocketClient,&U_rows,sizeof(int));
-        write(SocketClient,&U_cols,sizeof(int));
-        write(SocketClient,U_resultante.data(),U_resultante.size()*sizeof(double));
+        writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
+        writeN(SocketClient,&U_rows,sizeof(int));
+        writeN(SocketClient,&U_cols,sizeof(int));
+        writeN(SocketClient,U_resultante.data(),U_resultante.size()*sizeof(double));
  
     }
     while(1){
         sleep(1000);
     }
     writeBuffer= "q";
-    write(SocketClient,writeBuffer.data(),writeBuffer.size());
+    writeN(SocketClient,writeBuffer.data(),writeBuffer.size());
     shutdown(SocketClient, SHUT_RDWR);
     close(SocketClient);
     return 0;

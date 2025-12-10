@@ -60,13 +60,38 @@ mutex Mutex3;
 Eigen::MatrixXd U_distributed;
 Eigen::VectorXd Sigma;
 Eigen::MatrixXd VT;
+
+void writeN(int Socket, void * data, int size){
+    int bytes_left=size;
+    int offset=0;
+    while (bytes_left>0){
+        ssize_t bytes_written = write (Socket,((char*)data)+offset,min(1000,bytes_left));
+        if (bytes_written < 0) {
+            // CHEQUEO DE ERRORES RECUPERABLES
+            if (errno == EINTR) {
+                // Fue una interrupción del sistema (señal), intentamos de nuevo inmediatamente
+                continue; 
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // El socket no tiene datos AHORA, pero sigue vivo. Esperamos un poco.
+                usleep(1000); // Esperar 1ms
+                continue;
+            }
+        }
+        else{
+            offset+=bytes_written;
+            bytes_left-=bytes_written;
+            usleep(1000);
+        }
+    }
+}
+
 bool readN2(int Socket, void * data, int size){
     int bytes_left = size;
     int offset = 0;
     
     while(bytes_left > 0){
         ssize_t bytes_read = read(Socket, ((char *)data) + offset, bytes_left);
-        usleep(1000); // Esperar 1ms
 
         if (bytes_read < 0) {
             // CHEQUEO DE ERRORES RECUPERABLES
@@ -164,7 +189,7 @@ void sendSeedKP(ThreadData &thread){
     }
     thread.writeBuffer+=value;
 
-    write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+    writeN(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
     thread.log_buffer=thread.writeBuffer;
     cout<<"Sent: "<<thread.log_buffer<<endl;
 }
@@ -199,10 +224,10 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
         cout<<thread.log_buffer;
-        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+        writeN(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,lastProcessor,nCols);
-        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        writeN(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         //cout<<aux<<endl;
     }
     else{
@@ -220,10 +245,10 @@ void sendChunkOfMatrix(ThreadData thread,int nProcessor){
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
         cout<<thread.log_buffer;
-        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+        writeN(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=receivedMat.block(startRow,0,nRowsPerProcessor,nCols);
-        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        writeN(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         //cout<<aux<<endl;
     }
 }
@@ -250,7 +275,7 @@ void assingWork(){
 
         cout<<"nProcessor and nProcessors: " <<nProcessor << " "<< nProcessors<< endl;
         cout<<"Sent:" <<processor.second->log_buffer<<endl;
-        write(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
+        writeN(processor.second->SocketClient,processor.second->writeBuffer.data(),processor.second->writeBuffer.size());
         sendChunkOfMatrix(*(processor.second),nProcessor);
         processor.second->numProcessor=nProcessor;
         nProcessor++;
@@ -312,10 +337,10 @@ void sendU(ThreadData &thread){
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
         cout<<thread.log_buffer;
-        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+        writeN(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=U_distributed.block(startRow,0,lastProcessor,nCols);
-        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        writeN(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         cout<<"Sent: "<<aux<<endl;
     }
     else{
@@ -332,10 +357,10 @@ void sendU(ThreadData &thread){
         thread.writeBuffer=thread.writeBuffer+value;
         thread.log_buffer=thread.writeBuffer;
         cout<<thread.log_buffer;
-        write(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+        writeN(thread.SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
 
         Eigen::MatrixXd aux=U_distributed.block(startRow,0,nRowsPerProcessor,nCols);
-        write(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
+        writeN(thread.SocketClient,aux.data(),aux.size()*sizeof(double));
         cout<<"Sent: "<<aux<<endl;
     }
 }
@@ -360,15 +385,15 @@ void sendMatrixToClient(Eigen::MatrixXd &matrix){
     rows=matrix.rows();
     cols=matrix.cols();
 
-    write(connectedClient,&rows,sizeof(int));
-    write(connectedClient,&cols,sizeof(int));
-    write(connectedClient,matrix.data(),matrix.size()* sizeof(double));
+    writeN(connectedClient,&rows,sizeof(int));
+    writeN(connectedClient,&cols,sizeof(int));
+    writeN(connectedClient,matrix.data(),matrix.size()* sizeof(double));
 }
 
 void sendVectorXDToClient(Eigen::VectorXd &Vector){
     int size= Vector.size();
-    write(connectedClient,&size,sizeof(int));
-    write(connectedClient,Vector.data(),Vector.size()* sizeof(double));
+    writeN(connectedClient,&size,sizeof(int));
+    writeN(connectedClient,Vector.data(),Vector.size()* sizeof(double));
 }
 
 void readSocket(int SocketClient){
@@ -395,7 +420,7 @@ void readSocket(int SocketClient){
                     thread.writeBuffer="C";
                     thread.log_buffer=thread.writeBuffer;
                     cout<<"Sent:" <<thread.log_buffer<<endl;
-                    write(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                    writeN(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 }
                 else {
                     string error="Connection Error";
@@ -417,7 +442,7 @@ void readSocket(int SocketClient){
                     thread.writeBuffer="X"+str2+str1;
                     thread.log_buffer=thread.writeBuffer;
                     cout<<"Sent:" <<thread.log_buffer<<endl;
-                    write(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                    writeN(SocketClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 }
             }
             break;
@@ -545,15 +570,15 @@ void readSocket(int SocketClient){
                 cout<<"inside if n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
                 stackMatrixR(true);
                 thread.writeBuffer="K";
-                write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                writeN(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 cout<<"sent K\n";
                 sendMatrixToClient(R_stack);
                 thread.writeBuffer="L";
-                write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                writeN(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 cout<<"sent L\n";
                 sendVectorXDToClient(Sigma);
                 thread.writeBuffer="M";
-                write(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
+                writeN(connectedClient,thread.writeBuffer.data(),thread.writeBuffer.size());
                 cout<<"sent M\n";
                 sendMatrixToClient(VT);
             }
