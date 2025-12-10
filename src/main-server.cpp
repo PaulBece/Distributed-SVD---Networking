@@ -434,15 +434,11 @@ void readSocket(int SocketClient){
             readN2(SocketClient,&cols,sizeof(int));
             Eigen::MatrixXd R_k ( rows , cols);
             readN2 (SocketClient, R_k.data(), rows*cols*sizeof(double));
-            while(1){
-                if(Mutex.try_lock()){
-                    n_R++;
-                    Mutex.unlock();
-                    break;
-                }
-                sleep(10);
-            }
+            Mutex.lock();
             vecMatrix[thread.numProcessor]=R_k;
+            n_R++;
+            Mutex.unlock();
+            
             if(n_R==connectedProcessors.size()){
                 n_R=0;
                 stackMatrixR();
@@ -475,7 +471,6 @@ void readSocket(int SocketClient){
             Mutex.unlock();
             if(thread.numProcessor+1==connectedProcessors.size()){
                 Mutex2.lock();
-
                 VT= vecMatrix[0];
                 for (int i = 1; i < vecMatrix.size(); i++)
                 {
@@ -501,27 +496,26 @@ void readSocket(int SocketClient){
             readN2(SocketClient,&cols,sizeof(int));
             Eigen::MatrixXd U_k ( rows , cols);
             readN2 (SocketClient, U_k.data(), rows*cols*sizeof(double));
-            while(1){
-                Mutex.lock();
-                if (vecMatrix.size()==0){
-                    cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
-                    cout<<"RESIZE\n";
-                    vecMatrix.resize(connectedProcessors.size());
-                    cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
-                    cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
-                }
-                n_R++;
-                cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
-                Mutex.unlock();
-                break;
+
+            Mutex.lock();
+            if (vecMatrix.size()==0){
+                cout<<"From mutex\nSize of vecMatrix: "<<vecMatrix.size()<<endl;
+                cout<<"RESIZE\n";
+                vecMatrix.resize(connectedProcessors.size());
+                cout<<"Size of vecMatrix: "<<vecMatrix.size()<<endl;
+                cout<<"Size of connectecProcessors: "<<connectedProcessors.size()<<endl;
             }
-            
-            
             vecMatrix[thread.numProcessor]=U_k;
+            n_R++;
+            cout<<"Before leaving mutex n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
+            Mutex.unlock();
+
+            if (n_R==connectedProcessors.size()){
+                Mutex2.unlock();
+            }
+
             if(thread.numProcessor+1==connectedProcessors.size()){
-                while (n_R!=connectedProcessors.size()){
-                    sleep(1);
-                }
+                Mutex2.lock();
                 cout<<"inside if n_R: "<<n_R<<" from processor: "<<thread.numProcessor<<"\n";
                 stackMatrixR(true);
                 thread.writeBuffer="K";
